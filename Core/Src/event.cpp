@@ -1,0 +1,109 @@
+#include "top.h"
+#include "event.h"
+#include "logging.h"
+#include "drv_atten.h"
+#include "drv_dtmf.h"
+#include "card_comm.h"
+
+
+static const char *TAG = "event";
+
+
+/*
+ * Trick to call a C++ method from the RTOS
+ */
+
+Event::Event Event_handler;
+
+static void _worker(void *args) {
+	Event_handler.worker(args);
+}
+
+namespace Event {
+
+
+/*
+ * Initialization
+ */
+
+void Event::init(void) {
+
+
+	/* Mutex attributes */
+	static const osMutexAttr_t event_mutex_attr = {
+		"EventMutex",
+		osMutexRecursive | osMutexPrioInherit,
+		NULL,
+		0U
+	};
+
+	/* Worker thread attributes */
+	static const osThreadAttr_t worker_attr = {
+			"EventWorkerThread",
+			osThreadDetached,
+			NULL,
+			0,
+			NULL,
+			1024,
+			osPriorityHigh,
+			0,
+			0
+	};
+
+
+	/* Create mutex to protect event data between tasks */
+	this->_lock = osMutexNew(&event_mutex_attr);
+	if (this->_lock == NULL) {
+		LOG_PANIC(TAG, "Could not create lock");
+	}
+
+	/* Create worker task */
+	if(osThreadNew(_worker, NULL, &worker_attr) == NULL) {
+		LOG_PANIC(TAG, "Could not start worker thread");
+	}
+
+
+}
+
+/*
+ * Worker thread
+ */
+
+void Event::worker(void *args) {
+	uint32_t card = 0;
+
+
+	/*
+	 * This loop handles setting up and taking down calls, polling the DTMF receivers, and looking for attention events
+	 * It runs once every 10 milliseconds.
+	 */
+
+
+	for(;;) {
+		osDelay(10);
+
+		/* Poll DTMF receivers */
+		Dtmf_receivers.poll();
+
+		/* Poll ONE card on each 10ms pass */
+
+		bool atten = Attention.get_state(card);
+
+		if(atten) {
+			Card_comm.queue_info_request(card);
+		}
+
+
+		/* Card to poll next time */
+		card += 1;
+		if(card >= Atten::MAX_NUM_CARDS) {
+			card = 0;
+		}
+
+	}
+
+}
+
+
+} /* End namespace Event */
+

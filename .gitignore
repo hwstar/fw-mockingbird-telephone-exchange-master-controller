@@ -1,0 +1,12 @@
+*.o
+*.su
+*.d
+*.cyclo
+*.map
+*.elf
+*.list
+*.mk
+.cproject
+.mxproject
+.project
+.settings/
