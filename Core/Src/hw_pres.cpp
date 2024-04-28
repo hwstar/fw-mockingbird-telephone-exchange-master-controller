@@ -11,12 +11,12 @@ namespace HW_Pres {
  * Callback to get status of last I2C transaction
  */
 
-static void _probe_callback(uint8_t status, uint32_t trans_id) {
-	HW_pres.probe_callback(status, trans_id);
+static void _probe_callback(uint32_t type, uint32_t status, uint32_t trans_id) {
+	HW_pres.probe_callback(type, status, trans_id);
 }
 
 
-void HW_Pres::probe_callback(uint8_t status, uint32_t trans_id) {
+void HW_Pres::probe_callback(uint32_t type, uint32_t status, uint32_t trans_id) {
 	this->_response_received = true;
 	this->_response_status = status;
 

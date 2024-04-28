@@ -14,6 +14,19 @@ enum {REG_GET_EVENT=0, REG_GET_BUSY_STATUS=1, REG_SET_OR_ATTACHED=2, REG_SET_IN_
 enum {EV_NONE=0, EV_READY=1, EV_REQUEST_OR=2, EV_DIALED_DIGIT=2, EV_HOOKFLASH=3, EV_BUSY=4, EV_RINGING=5, EV_ANSWERED=6, EV_HUNGUP=7, };
 
 
+class Sub_Line {
+protected:
+	osMutexId_t _lock;
+	osEventFlagsId_t _event_flags;
+
+public:
+	void init(void);
+	void event_handler(uint32_t event_type, uint32_t resource);
+	void set_power_state(uint32_t line, bool state);
+};
+
 
 
 } /* End namespace Sub_Line */
+
+extern Sub_Line::Sub_Line Sub_line;

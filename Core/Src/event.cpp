@@ -4,6 +4,8 @@
 #include "drv_atten.h"
 #include "drv_dtmf.h"
 #include "card_comm.h"
+#include "sub_line.h"
+#include "trunk.h"
 
 
 static const char *TAG = "event";
@@ -65,12 +67,33 @@ void Event::init(void) {
 
 }
 
+
+/*
+ * Line handler static function
+ */
+
+static void __line_handler(uint32_t event_type, uint32_t resource ) {
+	Sub_line.event_handler(event_type, resource);
+}
+
+/*
+ * Trunk handler static function
+ */
+
+static void __trunk_handler(uint32_t event_type, uint32_t resource ) {
+
+	//Trunk.event_handler(event_type, resource);
+
+}
+
+
 /*
  * Worker thread
  */
 
 void Event::worker(void *args) {
 	uint32_t card = 0;
+	Card_Comm::Event_Handler handler = NULL;
 
 
 	/*
@@ -90,7 +113,13 @@ void Event::worker(void *args) {
 		bool atten = Attention.get_state(card);
 
 		if(atten) {
-			Card_comm.queue_info_request(card);
+			if(card > Sub_Line::MAX_DUAL_LINE_CARDS) {
+				handler = __trunk_handler;
+			}
+			else {
+				handler = __line_handler;
+			}
+			Card_comm.queue_get_event_request(card, handler);
 		}
 
 

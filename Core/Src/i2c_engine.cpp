@@ -125,7 +125,15 @@ bool I2C_Engine::queue_transaction(uint32_t type, uint32_t bus, int32_t expander
 	trans.device_address8 = device_address << 1;
 	trans.register_address = register_address;
 	trans.data_length = data_length;
-	memcpy(trans.caller_register_data, register_data, data_length);
+	if(type == I2CT_READ_REG8) {
+		trans.read_data = register_data;
+	}
+	else {
+		trans.read_data = NULL;
+		if(data_length) {
+			memcpy(trans.local_register_data + 1, register_data, data_length);
+		}
+	}
 	trans.callback = callback;
 
 	/* Choose the correct I2C bus handle */
@@ -349,7 +357,6 @@ void I2C_Engine::worker(void *args) {
 				/* Send write register transaction */
 				/* Prepend register address and copy data to local buffer */
 				trans.local_register_data[0] = trans.register_address;
-				memcpy(trans.local_register_data + 1, trans.caller_register_data, trans.data_length);
 
 				/* We write the register address and the data as one combined DMA transfer */
 				res = HAL_I2C_Master_Transmit_DMA(this->trans.bus, this->trans.device_address8, this->trans.local_register_data, this->trans.data_length + 1);
@@ -388,12 +395,14 @@ void I2C_Engine::worker(void *args) {
 				/* If OK and the command was a read */
 				if((this->trans.status == I2CEC_OK) && (this->trans.type == I2CT_READ_REG8)) {
 					/* Copy the read data to the user's buffer pointer */
-					memcpy(this->trans.caller_register_data, this->trans.local_register_data, this->trans.data_length);
+					if(this->trans.read_data) {
+						memcpy(this->trans.read_data, this->trans.local_register_data, this->trans.data_length);
+					}
 				}
 
 				/* Call the user-supplied callback function if specified*/
 				if(this->trans.callback) {
-					(*this->trans.callback)(this->trans.status, this->trans.id);
+					(*this->trans.callback)(this->trans.type, this->trans.status, this->trans.id);
 				}
 				/* Go back to Idle and look for more work */
 				this->_state = I2CS_IDLE;

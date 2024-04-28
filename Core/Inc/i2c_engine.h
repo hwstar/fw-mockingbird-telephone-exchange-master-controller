@@ -30,7 +30,7 @@ typedef struct I2C_Queue_Message {
 
 typedef I2C_Queue_Message *pI2C_Queue_Message;
 
-typedef void (*I2C_Callback_Type)(uint8_t status, uint32_t trans_id);
+typedef void (*I2C_Callback_Type)(uint32_t type, uint32_t status, uint32_t trans_id);
 
 typedef struct I2C_Transaction {
 	uint32_t hal_i2c_error_code;
@@ -43,7 +43,7 @@ typedef struct I2C_Transaction {
 	uint8_t device_address8;
 	uint8_t register_address;
 	uint8_t data_length;
-	uint8_t caller_register_data[MAX_I2C_REG_DATA];
+	uint8_t *read_data;
 	I2C_Callback_Type callback;
 	I2C_HandleTypeDef *bus;
 	uint8_t local_register_data[MAX_I2C_REG_DATA+1]; /* One more for write reg case to store register address */

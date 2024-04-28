@@ -16,6 +16,7 @@
 #include "json_rw.h"
 
 
+Sub_Line::Sub_Line Sub_line;
 
 static const char *TAG = "top";
 
@@ -60,10 +61,19 @@ void Top_init(void) {
 	File_io.init();
 	Json_rw.init();
 	HW_pres.probe();
+	Sub_line.init();
 	Event_handler.init();
 
 	/* Test Code Begin */
 
+	Card_comm.send_command(Card_Comm::RT_LINE, 0, Sub_Line::REG_POWER_CTRL, true);
+	Card_comm.send_command(Card_Comm::RT_LINE, 1, Sub_Line::REG_POWER_CTRL, true);
+	Card_comm.send_command(Card_Comm::RT_LINE, 2, Sub_Line::REG_POWER_CTRL, true);
+	Card_comm.send_command(Card_Comm::RT_LINE, 3, Sub_Line::REG_POWER_CTRL, true);
+	Card_comm.send_command(Card_Comm::RT_LINE, 4, Sub_Line::REG_POWER_CTRL, true);
+	Card_comm.send_command(Card_Comm::RT_LINE, 5, Sub_Line::REG_POWER_CTRL, true);
+	Card_comm.send_command(Card_Comm::RT_LINE, 6, Sub_Line::REG_POWER_CTRL, true);
+	Card_comm.send_command(Card_Comm::RT_LINE, 7, Sub_Line::REG_POWER_CTRL, true);
 
 	/* Test Code End */
 
