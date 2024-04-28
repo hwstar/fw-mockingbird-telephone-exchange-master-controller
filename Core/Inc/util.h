@@ -26,12 +26,27 @@ enum {SCOPE_TP1=1, SCOPE_TP2, SCOPE_TP3};
 
 namespace Util {
 
+/* 4K of short strings */
+const uint32_t SHORT_STRINGS_SIZE = 32;
+const uint32_t NUM_SHORT_STRINGS = 128;
+
+/* 2K of long strings */
+const uint32_t LONG_STRINGS_SIZE = 128;
+const uint32_t NUM_LONG_STRINGS = 16;
 
 
 class Util {
 public:
+	void init(void);
+	char *allocate_short_string(void);
+	void deallocate_short_string(char *str);
+	uint32_t get_num_allocated_short_strings(void);
+	char *allocate_long_string(void);
+	void deallocate_long_string(char *str);
+	uint32_t get_num_allocated_long_strings(void);
 	char *strncpy_term(char *dest, const char *source, size_t len);
 	int32_t strcasecmp(char const *a, char const *b);
+	void *memset(void * str, int c, size_t n);
 	bool get_gpio_pin_state(uint32_t logical_pin);
 	void set_gpio_pin_state(uint32_t logical_pin, bool state);
 	void pulse_gpio_pin(uint32_t logical_pin);

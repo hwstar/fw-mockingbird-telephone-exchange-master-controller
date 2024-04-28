@@ -2,6 +2,7 @@
 #include "top.h"
 #include "util.h"
 #include "logging.h"
+#include "pool_alloc.h"
 #include <string.h>
 #include <ctype.h>
 
@@ -52,6 +53,69 @@ static const Pin_Map pin_map[NUM_LOGICAL_PIN_MAPPINGS] = {
 		{XB_SW_Y0_GPIO_Port, XB_SW_Y0_Pin},
 };
 
+/* Storage for string allocators */
+static Pool_Alloc::Pool_Alloc _short_strings_allocator;
+static Pool_Alloc::Pool_Alloc _long_strings_allocator;
+static char _short_strings_pool[SHORT_STRINGS_SIZE * NUM_SHORT_STRINGS];
+static char _long_strings_pool[LONG_STRINGS_SIZE * NUM_LONG_STRINGS];
+
+/*
+ * init method. Called once after RTOS is up and running
+ */
+
+void Util::init(void) {
+	/* Initialize short strings allocator */
+	_short_strings_allocator.pool_init(_short_strings_pool, SHORT_STRINGS_SIZE, NUM_SHORT_STRINGS);
+	/* Initialize long strings allocator */
+	_long_strings_allocator.pool_init(_long_strings_pool, LONG_STRINGS_SIZE, NUM_LONG_STRINGS);
+}
+
+/*
+ * Allocate a short string from the string pool
+ */
+char *Util::allocate_short_string(void)  {
+	return reinterpret_cast<char *> (_short_strings_allocator.allocate_object());
+}
+
+/*
+ * Deallocate a short string and return it to the pool
+ */
+
+void Util::deallocate_short_string(char *str) {
+	_short_strings_allocator.deallocate_object(str);
+}
+
+/*
+ * Return the number of short strings allocated
+ */
+
+uint32_t Util::get_num_allocated_short_strings(void) {
+	return _short_strings_allocator.get_num_allocated_objects();
+}
+
+/*
+ * Allocate a long string from the string pool
+ */
+char *Util::allocate_long_string(void)  {
+	return reinterpret_cast<char *> (_long_strings_allocator.allocate_object());
+}
+
+/*
+ * Deallocate a long string and return it to the pool
+ */
+
+void Util::deallocate_long_string(char *str) {
+	_long_strings_allocator.deallocate_object(str);
+}
+
+/*
+ * Return the number of long strings allocated
+ */
+
+uint32_t Util::get_num_allocated_long_strings(void) {
+	return _long_strings_allocator.get_num_allocated_objects();
+}
+
 /*
  * Strncpy with guaranteed termination
  */
@@ -79,6 +143,17 @@ int32_t Util::strcasecmp(char const *a, char const *b)
     }
 }
 
+/*
+ * Memset
+ */
+
+void *Util::memset(void *str, int c, size_t len) {
+	uint8_t *stru8 = (uint8_t *) str;
+	for(size_t index = 0; index < len; index++) {
+		stru8[index] = (uint8_t) c;
+	}
+	return str;
+}
 
 /*
  * Get GPIO pin state

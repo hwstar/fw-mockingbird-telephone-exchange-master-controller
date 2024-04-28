@@ -1,5 +1,6 @@
 #include "mf_receiver.h"
 #include "top.h"
+#include "util.h"
 #include "uart.h"
 #include "i2c_engine.h"
 #include "console.h"
@@ -12,6 +13,7 @@
 #include "card_comm.h"
 #include "file_io.h"
 #include "hw_pres.h"
+#include "json_rw.h"
 
 
 
@@ -41,6 +43,7 @@ void Top_init(void) {
 	osDelay(1000);
 
 	/* Resources */
+	Utility.init();
 	Logger.init();
 	I2c.init();
 	MF_decoder.init();
@@ -55,10 +58,12 @@ void Top_init(void) {
 
 	/* After resources. Depends on resources being initialized */
 	File_io.init();
+	Json_rw.init();
 	HW_pres.probe();
 	Event_handler.init();
 
 	/* Test Code Begin */
+
 
 	/* Test Code End */
 
