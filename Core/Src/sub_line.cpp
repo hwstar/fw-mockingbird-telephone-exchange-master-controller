@@ -1,6 +1,7 @@
 #include "top.h"
 #include "logging.h"
 #include "card_comm.h"
+#include "xps_logical.h"
 #include "sub_line.h"
 
 namespace Sub_Line {
@@ -27,7 +28,7 @@ static const osMutexAttr_t lock_mutex_attr = {
  */
 
 void Sub_Line::event_handler(uint32_t event_type, uint32_t resource) {
-	LOG_DEBUG(TAG, "Received event from line card. Type: %u, Resource: %u", event_type, resource);
+	LOG_DEBUG(TAG, "Received event from physical line %u Type: %u ", resource, event_type);
 
 }
 

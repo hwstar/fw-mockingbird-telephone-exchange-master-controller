@@ -82,7 +82,7 @@ static void __line_handler(uint32_t event_type, uint32_t resource ) {
 
 static void __trunk_handler(uint32_t event_type, uint32_t resource ) {
 
-	//Trunk.event_handler(event_type, resource);
+	Trunks.event_handler(event_type, resource);
 
 }
 
@@ -113,7 +113,7 @@ void Event::worker(void *args) {
 		bool atten = Attention.get_state(card);
 
 		if(atten) {
-			if(card > Sub_Line::MAX_DUAL_LINE_CARDS) {
+			if(card >= Sub_Line::MAX_DUAL_LINE_CARDS) {
 				handler = __trunk_handler;
 			}
 			else {
@@ -129,6 +129,7 @@ void Event::worker(void *args) {
 			card = 0;
 		}
 
+		Trunks.poll();
 	}
 
 }

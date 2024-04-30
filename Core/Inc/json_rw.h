@@ -3,34 +3,43 @@
 
 namespace Json_RW {
 
+
+
 const uint32_t MAX_NODE_BLOCKS = 128;
-const uint32_t MAX_JSON_STRING = 16;
 const uint32_t FILE_BUFFER_SIZE = 8192;
-const uint32_t MAX_JSON_NODE_BUFFER = 128;
+
+enum {VT_OBJECT, VT_STRING, VT_NUMBER, VT_BOOLEAN, VT_NULL_TYPE };
 
 /*
  * JSON Node Data Type
  */
 
-typedef struct Json_Node {
-	char key[MAX_JSON_STRING];
+struct Json_Node {
+	union Values {
+		bool b_val;
+		float f_val;
+		char *str_val;
+	} values;
 	uint8_t value_type;
-	union value {
-		bool bool_val;
-		int32_t int_val;
-		char str_val[MAX_JSON_STRING];
-		struct Json_Node *ll_node;
-	};
-	struct Json_Node *next;
+};
 
-} Json_Node_Type;
+struct Json_Object {
+	char *key;
+	struct Json_Node *value;
+};
+
+typedef struct Json_Node Json_Node_Type;
+typedef struct Json_Object Json_Object_Type;
 
 
 
 class Json_RW {
 
 protected:
-	char _node_buffer[MAX_JSON_NODE_BUFFER];
+	Json_Node *allocate_node(void);
+
+
+	Json_Node *first_node;
 
 public:
 	void init(void);

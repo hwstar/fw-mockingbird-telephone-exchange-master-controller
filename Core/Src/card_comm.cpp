@@ -47,7 +47,7 @@ void Card_Comm::_event_callback(uint32_t type, uint32_t status, uint32_t trans_i
 		/* E&M trunk card */
 		if(this->_event_handler) {
 			uint32_t type = this->_i2c_read_data[card][0]; /* Event type */
-			uint32_t resource = card;
+			uint32_t resource = card - Sub_Line::MAX_DUAL_LINE_CARDS;
 			(*this->_event_handler)(type, resource);
 		}
 	}

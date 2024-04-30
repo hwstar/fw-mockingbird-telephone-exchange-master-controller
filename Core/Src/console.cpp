@@ -6,6 +6,7 @@
  */
 
 #include "top.h"
+#include "util.h"
 #include "console.h"
 #include "logging.h"
 #include "uart.h"
@@ -46,6 +47,8 @@ static bool command_mfr_release(Holder_Type *vars, uint32_t *error_code);
 static bool command_dtmfr_seize(Holder_Type *vars, uint32_t *error_code);
 static bool command_dtmfr_release(Holder_Type *vars, uint32_t *error_code);
 static bool command_config_hw_view_present(Holder_Type *vars, uint32_t *error_code);
+static bool command_help(Holder_Type *vars, uint32_t *error_code);
+
 
 const uint8_t dtmfr_seize_arg_type[] = {AT_UINT, AT_END};
 const Command_Table_Entry_Type test_xps_dtmfr_level[] = {
@@ -120,8 +123,9 @@ const Command_Table_Entry_Type config_level[] = {
 };
 
 const Command_Table_Entry_Type command_table_top[] = {
-		{test_xps_level, NULL, NULL, "test"},
 		{config_level, NULL, NULL, "config"},
+		{NULL, command_help, NULL, "help"},
+		{test_xps_level, NULL, NULL, "test"},
 
 		{NULL, NULL, NULL, ""}
 };
@@ -142,6 +146,67 @@ const char *console_error_strings[] = {
 
 
 /*
+ * Command Helper functions
+ *
+ *
+ *
+ *
+ */
+
+/*
+ * Walk the command table and print out the command keywords for each command type
+ */
+
+static void _help_walk_command_table(const Command_Table_Entry_Type *cte, char *work_string) {
+
+
+	char *local_work_string = Utility.allocate_long_string();
+
+	if(!local_work_string) {
+				LOG_ERROR(TAG, "Out of memory");
+				return;
+			}
+
+	while(strlen(cte->keyword)) {
+		/* Make new copy of working string passed in */
+		strncpy(local_work_string, work_string, Util::LONG_STRINGS_SIZE - 1);
+		/* Append the current command keyword */
+		strncat(local_work_string, cte->keyword, Util::LONG_STRINGS_SIZE - 1);
+		/* Append one space */
+		strncat(local_work_string, " ", Util::LONG_STRINGS_SIZE - 1);
+		/* If we have a pointer to the next table, recurse to it */
+		if(cte->next_table) {
+			_help_walk_command_table(cte->next_table, local_work_string);
+		}
+		/* If we have a command, it means this is an ending node in the table */
+
+		else if(cte->command) {
+			if(cte->arguments) {
+				const uint8_t *arg = cte->arguments;
+				/* Append parameter list */
+				while(*arg != AT_END) {
+					switch(*arg) {
+					case AT_FL:
+						strncat(local_work_string, "<float> ", Util::LONG_STRINGS_SIZE - 1);
+						break;
+					case AT_UINT:
+						strncat(local_work_string, "<uint> ", Util::LONG_STRINGS_SIZE - 1);
+						break;
+					}
+					arg++;
+				}
+			}
+			/* At end of command print string */
+			printf("%s\n", local_work_string);
+		}
+		cte++;
+	}
+	Utility.deallocate_long_string(local_work_string);
+}
+
+
+
+/*
  *
  *
  * Command functions called by class
@@ -149,6 +214,27 @@ const char *console_error_strings[] = {
  *
  *
  */
+
+
+static bool command_help(Holder_Type *vars, uint32_t *error_code) {
+
+
+	char *work_string = Utility.allocate_long_string();
+
+	if(!work_string) {
+			LOG_ERROR(TAG, "Out of memory");
+			return false;
+		}
+
+
+	/* Walk the command table */
+	_help_walk_command_table(command_table_top, work_string);
+
+	Utility.deallocate_long_string(work_string);
+
+
+	return true;
+}
 
 /*
  * Open a crosspoint switch
@@ -231,7 +317,7 @@ static bool command_xps_status(Holder_Type *vars, uint32_t *error_code) {
 
 	/* Print the header */
 	printf("  LLLLLLLLLLLLLLLL TTTTTT--GDGDGMGM\n");
-	printf("  0011223344556677 001122--00112021\n");
+	printf("  0011223344556677 001122--00112031\n");
 	printf("  RTRTRTRTRTRTRTRT RTRTRT--RTRTRTRT\n");
 	printf("  0000000000111111 1111222222222233\n");
 	printf("  0123456789012345 6789012345678901\n");
