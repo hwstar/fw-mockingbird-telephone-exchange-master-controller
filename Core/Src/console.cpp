@@ -316,16 +316,19 @@ static bool command_xps_close(Holder_Type *vars, uint32_t *error_code) {
 static bool command_xps_status(Holder_Type *vars, uint32_t *error_code) {
 
 	/* Print the header */
+	printf("  v^v^v^v^v^v^v^v^ v^v^v^--v^v^v^v^\n");
 	printf("  LLLLLLLLLLLLLLLL TTTTTT--GDGDGMGM\n");
 	printf("  0011223344556677 001122--00112031\n");
 	printf("  RTRTRTRTRTRTRTRT RTRTRT--RTRTRTRT\n");
 	printf("  0000000000111111 1111222222222233\n");
 	printf("  0123456789012345 6789012345678901\n");
-	printf("\n");
 	unsigned x,y;
 
 	/* Print Matrix */
 	for(y = 0; y < 8; y++) {
+		if((y & 1) == 0) {
+			printf("\n"); /* Print blank line between pairs */
+		}
 		printf("%u ", y);
 		for(x = 0; x < 32; x++) {
 			if(Xps_logical.get_switch_state(x,y)) {
