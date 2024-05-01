@@ -13,10 +13,65 @@ static const char *TAG = "trunk";
 namespace Trunk {
 
 
+/*
+ * Called when there is an MF address to process
+ */
+
+void __mf_receiver_callback(uint32_t descriptor, uint8_t error_code, uint8_t digit_count, char *data) {
+	Trunks._mf_receiver_callback(descriptor, error_code, digit_count, data);
+}
+
+/*
+ * Called from __mf_receiver_callback();
+ */
+
+void Trunk::_mf_receiver_callback(uint32_t descriptor, uint8_t error_code, uint8_t digit_count, char *data) {
+	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
+
+
+
+	if(error_code == MF_Decoder::MFE_OK) {
+		LOG_DEBUG(TAG, "Received MF address: %s from descriptor %u", data, descriptor);
+	}
+	else {
+		LOG_ERROR(TAG, "Descriptor %d timed out waiting for MF Digits", descriptor);
+		/* Todo: This needs to be properly handled */
+	}
+
+	osMutexRelease(this->_lock); /* Release the lock */
+
+
+}
+
+/*
+ * This gets called when an event from a trunk card is received
+ */
+
 void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
+
+
+	if(resource  >= MAX_TRUNK_CARDS) {
+		LOG_PANIC(TAG, "Invalid trunk number");
+	}
+
 	LOG_DEBUG(TAG, "Received event from physical trunk %u. Type: %u",resource, event_type);
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
+
+	Trunk_Info *tinfo = &this->_trunk_info[resource];
+
+	/* Incoming call from trunk */
+	if((tinfo->state == TS_IDLE) && (event_type == EV_REQUEST_IR)) {
+		tinfo->state = TS_SEIZE_JUNCTOR;
+	}
+	else if(event_type == EV_CALL_DROPPED) {
+		/* Call dropped by originator, check to see if we need to take action */
+		if((tinfo->state == TS_SEIZE_JUNCTOR) ||
+				(tinfo->state == TS_SEIZE_MFR) ||
+				(tinfo->state == TS_WAIT_ADDR_INFO)) {
+			tinfo->state = TS_RESET;
+		}
+	}
 
 
 	osMutexRelease(this->_lock); /* Release the lock */
@@ -59,7 +114,6 @@ void Trunk::init(void) {
  * Called repeatedly by event task
  */
 
-
 void Trunk::poll(void) {
 
 
@@ -71,8 +125,31 @@ void Trunk::poll(void) {
 	switch(tinfo->state) {
 	case TS_IDLE:
 		/* Wait for Request IR event */
-
 		break;
+
+	case TS_SEIZE_JUNCTOR:
+		if(Xps_logical.seize(&tinfo->jinfo)) {
+			tinfo->junctor_seized = true;
+			tinfo->state = TS_SEIZE_MFR;
+		}
+		break;
+
+	case TS_SEIZE_MFR: /* Seize MF receiver */
+		if((tinfo->mf_receiver_descriptor = MF_decoder.seize(__mf_receiver_callback)) > -1) {
+			/* Connect trunk RX and TX to assigned junctor */
+			Xps_logical.connect_trunk_orig(&tinfo->jinfo, this->_trunk_to_service);
+			/* Make audio connection to seized MF receiver */
+			Xps_logical.connect_mf_receiver(&tinfo->jinfo, tinfo->mf_receiver_descriptor);
+			/* Tell trunk card to send a wink */
+			Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_SEND_WINK);
+			tinfo->state = TS_WAIT_ADDR_INFO;
+
+		}
+		break;
+
+	case TS_WAIT_ADDR_INFO:
+		break; /* ToDo */
+
 
 	case TS_RESET:
 		if(tinfo->junctor_seized) {
@@ -89,8 +166,8 @@ void Trunk::poll(void) {
 					MF_decoder.release(tinfo->dtmf_receiver_descriptor);
 					tinfo->dtmf_receiver_descriptor = -1;
 				}
-			/* Then reset the junctor connections */
-			Xps_logical.disconnect_all(&tinfo->jinfo);
+			/* Then release the junctor */
+			Xps_logical.release(&tinfo->jinfo);
 			tinfo->junctor_seized = false;
 		}
 		tinfo->state = TS_IDLE;

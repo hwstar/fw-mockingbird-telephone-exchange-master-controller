@@ -12,6 +12,17 @@ namespace Card_Comm {
 
 static const char *TAG = "cardcomm";
 
+/*
+ * Callback to indicate command completed and that error status should be checked.
+ */
+
+static void __event_callback_command(uint32_t type, uint32_t status, uint32_t trans_id) {
+	if(status != I2C_Engine::I2CEC_OK) {
+		LOG_ERROR(TAG, "I2C bus transaction error, status = %u", status);
+	}
+
+}
+
 
 /*
  * Callback to get event info from card
@@ -32,6 +43,7 @@ void Card_Comm::_event_callback(uint32_t type, uint32_t status, uint32_t trans_i
 
 	if(status != I2C_Engine::I2CEC_OK) {
 		LOG_ERROR(TAG, "Get event failed with status %u on card %u", status, card);
+		this->_pending_bits &= ~(1 << card);
 		return;
 	}
 
@@ -97,7 +109,6 @@ bool Card_Comm::queue_get_event_request(uint32_t card, Event_Handler handler) {
 		uint32_t register_address = (card >= 4) ? (uint32_t) Trunk::REG_GET_EVENT : (uint32_t) Sub_Line::REG_GET_EVENT;
 		uint32_t event_message_length = (card >= 4) ? Trunk::EVENT_MESSAGE_LENGTH : Sub_Line::EVENT_MESSAGE_LENGTH;
 
-
 		bool res = I2c.queue_transaction(I2C_Engine::I2CT_READ_REG8, 0, card, device_address,
 				register_address, event_message_length,
 				this->_i2c_read_data[card], __event_callback, card);
@@ -139,6 +150,8 @@ bool Card_Comm::send_command(uint32_t resource_type, uint32_t resource, uint32_t
 		}
 	}
 
+	//LOG_DEBUG(TAG, "Sending command %u to resourse %u, resource type %u, parameter %u",
+	//			command, resource, resource_type, parameter);
 	/* Get the lock */
 	osStatus status = osMutexAcquire(this->_lock, osWaitForever);
 
@@ -163,7 +176,7 @@ bool Card_Comm::send_command(uint32_t resource_type, uint32_t resource, uint32_t
 		}
 
 		res = I2c.queue_transaction(I2C_Engine::I2CT_WRITE_REG8, 0, card, Sub_Line::LINE_CARD_I2C_ADDRESS,
-			command, data_length, i2c_write_data, __event_callback, card);
+			command, data_length, i2c_write_data, __event_callback_command, card);
 
 		if(!res) {
 			LOG_ERROR(TAG, "I2C Queue Transaction failed due to full queue");
@@ -172,9 +185,9 @@ bool Card_Comm::send_command(uint32_t resource_type, uint32_t resource, uint32_t
 
 	}
 	else { /* RT_TRUNK */
-		card = resource;
-		res = I2c.queue_transaction(I2C_Engine::I2CT_WRITE_REG8, 0, card + Sub_Line::MAX_DUAL_LINE_CARDS, Trunk::TRUNK_CARD_I2C_ADDRESS,
-			command, 0, i2c_write_data, __event_callback, card);
+		card = resource + Sub_Line::MAX_DUAL_LINE_CARDS;
+		res = I2c.queue_transaction(I2C_Engine::I2CT_WRITE_REG8, 0, card, Trunk::TRUNK_CARD_I2C_ADDRESS,
+			command, 0, i2c_write_data, __event_callback_command, card);
 
 		if(!res) {
 			LOG_ERROR(TAG, "I2C Queue Transaction failed due to full queue");

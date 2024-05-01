@@ -577,6 +577,7 @@ void XPS_Logical::disconnect_tone_plant_output(Junctor_Info *info) {
 		}
 
 	if(info->connections.tone_plant.resource == RSRC_TONE_PLANT) {
+		info->connections.tone_plant.resource = RSRC_NONE;
 		this->open_switch(info->connections.tone_plant.x, info->connections.tone_plant.y);
 
 	}
@@ -625,6 +626,7 @@ void XPS_Logical::disconnect_dtmf_receiver(Junctor_Info *info) {
 		}
 
 	if(info->connections.digit_receiver.resource == RSRC_DTMF_RCVR) {
+		info->connections.digit_receiver.resource = RSRC_NONE;
 		this->open_switch(info->connections.digit_receiver.x, info->connections.digit_receiver.y);
 
 	}
@@ -648,7 +650,7 @@ void XPS_Logical::connect_mf_receiver(Junctor_Info *info, int32_t mf_receiver_de
 		LOG_PANIC(TAG, "Bad Descriptor");
 	}
 
-	uint8_t x = this->get_trunk_x(mf_receiver_descriptor);
+	uint8_t x = this->get_mf_receiver_x(mf_receiver_descriptor);
 	uint8_t y = this->get_path_y(info->junctor_descriptor, orig_term);
 
 	if(info->connections.digit_receiver.resource == RSRC_NONE) {
@@ -675,6 +677,7 @@ void XPS_Logical::disconnect_mf_receiver(Junctor_Info *info) {
 		}
 
 	if(info->connections.digit_receiver.resource == RSRC_MF_RCVR) {
+		info->connections.digit_receiver.resource = RSRC_NONE;
 		this->open_switch(info->connections.digit_receiver.x, info->connections.digit_receiver.y);
 
 	}

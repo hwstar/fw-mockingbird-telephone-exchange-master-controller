@@ -76,23 +76,6 @@ void Top_init(void) {
 	Card_comm.send_command(Card_Comm::RT_LINE, 5, Sub_Line::REG_POWER_CTRL, true);
 	Card_comm.send_command(Card_Comm::RT_LINE, 6, Sub_Line::REG_POWER_CTRL, true);
 	Card_comm.send_command(Card_Comm::RT_LINE, 7, Sub_Line::REG_POWER_CTRL, true);
-	osDelay(1000);
-
-	/* Seize junctor */
-	XPS_Logical::Junctor_Info info;
-	if(!Xps_logical.seize(&info)) {
-		LOG_ERROR(TAG, "Unable to seize junctor");
-
-	}
-
-	Xps_logical.connect_phone_orig(&info, 6);
-	Xps_logical.connect_trunk_term(&info, 0);
-
-
-	Xps_logical.disconnect_all(&info);
-
-	/* Release junctor */
-	Xps_logical.release(&info);
 
 
 
