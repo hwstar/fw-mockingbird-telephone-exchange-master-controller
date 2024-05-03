@@ -10,13 +10,13 @@ enum {DS_WAIT_STB_TRUE=0, DS_WAIT_STB_FALSE};
 
 const uint8_t NUM_DTMF_RECEIVERS = 2;
 
-typedef void (*Dtmf_Callback)(int32_t descriptor, char digit);
+typedef void (*Dtmf_Callback)(int32_t descriptor, char digit, uint32_t parameter);
 
 class Dtmf {
 public:
 	void init(void);
 	void poll();
-	int32_t seize(Dtmf_Callback callback, int32_t receiver=-1);
+	int32_t seize(Dtmf_Callback callback, uint32_t parameter = 0, int32_t receiver=-1);
 	void release(int32_t descriptor);
 
 protected:
@@ -28,6 +28,7 @@ protected:
 
 	osMutexId_t _lock;
 	uint32_t _siezed_receivers;
+	uint32_t _parameter[NUM_DTMF_RECEIVERS];
 	uint8_t _state[NUM_DTMF_RECEIVERS];
 	char _digit[NUM_DTMF_RECEIVERS];
 	Dtmf_Callback _callback[NUM_DTMF_RECEIVERS];

@@ -130,6 +130,7 @@ void Event::worker(void *args) {
 		}
 
 		Trunks.poll();
+		Sub_line.poll();
 	}
 
 }

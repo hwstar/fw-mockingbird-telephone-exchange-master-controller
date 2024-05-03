@@ -77,12 +77,12 @@ void HW_Pres::probe(void) {
 		uint8_t data[2] = {0, 0};
 		bool failed = false;
 		/*
-		 * Attempt drop call and look for I2C errors
+		 * Attempt trunk card reset
 		 */
 		this->_response_received = false;
 		data[0] = 0;
-		I2c.queue_transaction(I2C_Engine::I2CT_WRITE_REG8, 0,  index + 4, Trunk::TRUNK_CARD_I2C_ADDRESS,
-				Trunk::REG_DROP_CALL, 2, data, _probe_callback);
+		I2c.queue_transaction(I2C_Engine::I2CT_WRITE_REG8, 0,  index + Sub_Line::MAX_DUAL_LINE_CARDS, Trunk::TRUNK_CARD_I2C_ADDRESS,
+				Trunk::REG_RESET, 2, data, _probe_callback);
 		while(this->_response_received == false) {
 			osDelay(1);
 		}

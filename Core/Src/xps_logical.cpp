@@ -548,6 +548,8 @@ void XPS_Logical::connect_tone_plant_output(Junctor_Info *info, int32_t tone_pla
 		LOG_PANIC(TAG, "Bad Descriptor");
 	}
 
+	orig_term = !orig_term; /* Tone plant needs to be on the odd side of the junctor by default since it is a transmitter */
+
 	uint8_t x = this->get_tone_plant_x(tone_plant_descriptor);
 	uint8_t y = this->get_path_y(info->junctor_descriptor, orig_term);
 

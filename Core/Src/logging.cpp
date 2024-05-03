@@ -64,6 +64,7 @@ void Logging::panic(const char *tag, uint32_t line, const char *format, ...) {
 	log_message[MAX_LOG_SIZE - 1] = 0;
 
 	this->_xmit_logitem(tag, 0, 0, log_message, line);
+	osDelay(100);
 	Error_Handler();
 
 

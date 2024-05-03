@@ -127,7 +127,7 @@ void Dtmf::poll(void) {
 				/* Test for active callback */
 				if(this->_callback[receiver]) {
 					/* Call the callback */
-					(*this->_callback[receiver])(receiver, this->_digit[receiver]);
+					(*this->_callback[receiver])(receiver, this->_digit[receiver], this->_parameter[receiver]);
 				}
 				this->_state[receiver] = DS_WAIT_STB_TRUE;
 			}
@@ -151,11 +151,11 @@ void Dtmf::poll(void) {
  * Returns -1 if unsuccessful, else a receiver descriptor.
  */
 
-int32_t Dtmf::seize(Dtmf_Callback callback, int32_t receiver) {
+int32_t Dtmf::seize(Dtmf_Callback callback, uint32_t parameter, int32_t receiver) {
 	int32_t receiver_to_test;
 
 	/* Validate receiver number */
-	if((receiver < 0) || (receiver >= NUM_DTMF_RECEIVERS)) {
+	if((receiver < -1) || (receiver >= NUM_DTMF_RECEIVERS)) {
 		LOG_PANIC(TAG, "Invalid receiver number");
 	}
 
@@ -173,6 +173,7 @@ int32_t Dtmf::seize(Dtmf_Callback callback, int32_t receiver) {
 			if((this->_siezed_receivers & receiver_mask_bit) == 0) {
 				this->_siezed_receivers |= receiver_mask_bit;
 				receiver = receiver_to_test;
+				break;
 			}
 		}
 	}
@@ -188,6 +189,7 @@ int32_t Dtmf::seize(Dtmf_Callback callback, int32_t receiver) {
 	}
 
 	if(receiver != -1) { /* If successful */
+		this->_parameter[receiver] = parameter;
 		this->_callback[receiver] = callback;
 	}
 

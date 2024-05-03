@@ -17,7 +17,7 @@ namespace Trunk {
  * Called when there is an MF address to process
  */
 
-void __mf_receiver_callback(uint32_t descriptor, uint8_t error_code, uint8_t digit_count, char *data) {
+static void __mf_receiver_callback(uint32_t descriptor, uint8_t error_code, uint8_t digit_count, char *data) {
 	Trunks._mf_receiver_callback(descriptor, error_code, digit_count, data);
 }
 
@@ -58,7 +58,7 @@ void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 
-	Trunk_Info *tinfo = &this->_trunk_info[resource];
+	Connector::Conn_Info *tinfo = &this->_conn_info[resource];
 
 	/* Incoming call from trunk */
 	if((tinfo->state == TS_IDLE) && (event_type == EV_REQUEST_IR)) {
@@ -99,7 +99,7 @@ void Trunk::init(void) {
 	}
 
 	for(uint8_t index = 0; index < MAX_TRUNK_CARDS; index++) {
-		Trunk_Info *tinfo = &this->_trunk_info[index];
+		Connector::Conn_Info *tinfo = &this->_conn_info[index];
 
 		tinfo->state = TS_IDLE;
 		tinfo->tone_plant_descriptor = tinfo->mf_receiver_descriptor = tinfo->dtmf_receiver_descriptor = -1;
@@ -120,7 +120,7 @@ void Trunk::poll(void) {
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 
-	Trunk_Info *tinfo = &this->_trunk_info[this->_trunk_to_service];
+	Connector::Conn_Info *tinfo = &this->_conn_info[this->_trunk_to_service];
 
 	switch(tinfo->state) {
 	case TS_IDLE:
@@ -152,21 +152,22 @@ void Trunk::poll(void) {
 
 
 	case TS_RESET:
-		if(tinfo->junctor_seized) {
-			/* Release any resources first */
-			if(tinfo->tone_plant_descriptor != -1) {
-				Tone_plant.channel_release(tinfo->tone_plant_descriptor);
-				tinfo->tone_plant_descriptor = -1;
+		/* Release any resources first */
+		if(tinfo->tone_plant_descriptor != -1) {
+			Tone_plant.channel_release(tinfo->tone_plant_descriptor);
+			tinfo->tone_plant_descriptor = -1;
+		}
+		if(tinfo->mf_receiver_descriptor != -1) {
+				MF_decoder.release(tinfo->mf_receiver_descriptor);
+				tinfo->mf_receiver_descriptor = -1;
 			}
-			if(tinfo->mf_receiver_descriptor != -1) {
-					MF_decoder.release(tinfo->mf_receiver_descriptor);
-					tinfo->mf_receiver_descriptor = -1;
-				}
-			if(tinfo->dtmf_receiver_descriptor != -1) {
-					MF_decoder.release(tinfo->dtmf_receiver_descriptor);
-					tinfo->dtmf_receiver_descriptor = -1;
-				}
-			/* Then release the junctor */
+		if(tinfo->dtmf_receiver_descriptor != -1) {
+				MF_decoder.release(tinfo->dtmf_receiver_descriptor);
+				tinfo->dtmf_receiver_descriptor = -1;
+			}
+
+		/* Then release the junctor if we seized it initially */
+		if(tinfo->junctor_seized) {
 			Xps_logical.release(&tinfo->jinfo);
 			tinfo->junctor_seized = false;
 		}

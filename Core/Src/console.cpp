@@ -676,7 +676,7 @@ static bool command_mfr_release(Holder_Type *vars, uint32_t *error_code) {
  * DTMF Receiver callback
  */
 
-static void dtmf_event_callback(int32_t descriptor, char digit) {
+static void dtmf_event_callback(int32_t descriptor, char digit, uint32_t parameter) {
 	LOG_DEBUG(TAG, "DTMF Receiver: %d: DTMF Digit Received: %c", (int) descriptor, digit);
 }
 /*
@@ -710,7 +710,7 @@ static bool command_dtmfr_seize(Holder_Type *vars, uint32_t *error_code) {
 		Dtmf_receivers.release(descriptor);
 	}
 	/* Attempt to seize or re-seize the MF Receiver */
-	descriptor = Dtmf_receivers.seize(dtmf_event_callback, (int32_t) channel);
+	descriptor = Dtmf_receivers.seize(dtmf_event_callback, 711, (int32_t) channel);
 	System_console.set_dtmfr_descriptor(descriptor);
 	if(descriptor == -1) {
 		/* Someone else is using it */
