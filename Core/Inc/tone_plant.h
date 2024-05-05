@@ -163,17 +163,17 @@ typedef struct Mf {
 const Indications INDICATIONS = { /* Follows the precise tone plan: https://en.wikipedia.org/wiki/Precise_tone_plan */
 									{
 											{350.0, 440.0}, /* Dial Tone Frequencies */
-											{-9, -9}, /* Levels in dB */
+											{-7, -7}, /* Levels in dB */
 									},
 									{
 											{480.0, 620.0}, /* Busy/Congestion Frequencies */
-											{-9, -9}, /* Levels in dB*/
+											{-7, -7}, /* Levels in dB*/
 											500, /* Busy cadence */
 											250 /* Circuit busy cadence */
 									},
 									{
 											{440.0, 480.0}, /* Ringing Frequencies */
-											{-9, -9}, /* Levels in dB*/
+											{-7, -7}, /* Levels in dB*/
 											2000, /* On cadence cadence */
 											4000 /* Off cadence */
 									}

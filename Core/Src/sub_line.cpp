@@ -120,13 +120,46 @@ void Sub_Line::event_handler(uint32_t event_type, uint32_t resource) {
 
 }
 
-/* This handler receives messages from the connection peer */
+/* This handler receives messages to change the line state or ask for status */
 
-uint32_t Sub_Line::peer_message_handler(Connector::Conn_Info conn_info, uint32_t message) {
-	/* Todo add logic */
+uint32_t Sub_Line::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t phys_line_trunk_number, uint32_t message) {
+
+	if(!conn_info) {
+		LOG_PANIC(TAG, "Null pointer passed in");
+	}
+	if(phys_line_trunk_number >= MAX_DUAL_LINE_CARDS * 2) {
+		LOG_PANIC(TAG, "Bad parameter value");
+	}
+	uint32_t res = Connector::PMR_OK;
+
+	/* Point to the connection info for the physical line number */
+	Connector::Conn_Info *linfo = &this->_conn_info[phys_line_trunk_number];
+
+	LOG_DEBUG(TAG, "Received message %u from source equip type %u, physical line number %u",
+			message,
+			conn_info->route_info.source_equip_type,
+			conn_info->route_info.source_phys_line_number);
 
 
-	return 0;
+	switch(message) {
+	case Connector::PM_SEIZE:
+		if(linfo->state == LS_IDLE) {
+			linfo->peer = conn_info;
+			/* Todo change line state to incoming call */
+
+		}
+		else {
+			/* Line in use */
+			res = Connector::PMR_BUSY;
+
+		}
+		break;
+
+	default:
+		LOG_PANIC(TAG, "Bad parameter value");
+		break;
+	}
+	return res;
 }
 
 /*
@@ -169,7 +202,7 @@ void Sub_Line::poll(void) {
 
 	case LS_SEIZE_JUNCTOR:
 		if(Xps_logical.seize(&linfo->jinfo)) {
-				Conn.prepare(linfo, Connector::DT_LINE, this->_line_to_service);
+				Conn.prepare(linfo, Connector::ET_LINE, this->_line_to_service);
 				linfo->junctor_seized = true;
 				linfo->state = LS_SEIZE_TG;
 			}
@@ -262,9 +295,6 @@ void Sub_Line::poll(void) {
 				LOG_PANIC(TAG, "Unhandled case");
 				break;
 			}
-
-
-			linfo->state = LS_WAIT_HANGUP;
 		}
 		break;
 
@@ -302,6 +332,7 @@ void Sub_Line::poll(void) {
 			Xps_logical.release(&linfo->jinfo);
 			linfo->junctor_seized = false;
 		}
+		linfo->peer = NULL;
 		linfo->state = LS_IDLE;
 		break;
 

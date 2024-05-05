@@ -39,7 +39,7 @@ public:
 	void event_handler(uint32_t event_type, uint32_t resource);
 	void init(void);
 	void poll(void);
-	uint32_t peer_message_handler(Connector::Conn_Info conn_info, uint32_t message);
+	uint32_t peer_message_handler(Connector::Conn_Info *conn_info, uint32_t phys_line_trunk_number, uint32_t message);
 
 };
 

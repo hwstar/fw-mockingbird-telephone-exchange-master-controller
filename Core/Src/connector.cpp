@@ -15,9 +15,9 @@ const char *TAG = "connector";
 /* Todo: Can't be hard coded in real implementation. Real implementation needs to be a linked list in RAM */
 
 static const Route_Table_Entry route_table_entries[] = {
-{"2980400", DT_LINE, 0, 0, 1, {6}},
-{"2980401", DT_LINE, 0, 0, 1, {7}},
-{"", DT_LINE, 0, 0, 0, {0}}, /* Marks the end of the route table */
+{"2980400", ET_LINE, 0, 0, 1, {6}},
+{"2980401", ET_LINE, 0, 0, 1, {7}},
+{"", ET_UNDEF, 0, 0, 0, {0}}, /* Marks the end of the route table */
 
 
 };
@@ -120,7 +120,7 @@ void Connector::prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32
 	conn_info->route_info.state = ROUTE_INDETERMINATE;
 	conn_info->route_info.source_equip_type = source_equip_type;
 	conn_info->route_info.source_phys_line_number = source_phys_line_number;
-	conn_info->route_info.dest_equip_type = DT_UNDEF;
+	conn_info->route_info.dest_equip_type = ET_UNDEF;
 	conn_info->route_info.dest_line_trunk_count = 0;
 }
 
@@ -204,6 +204,26 @@ uint32_t Connector::connect(Conn_Info *conn_info) {
 			conn_info->route_info.route_table_entry->phys_lines_trunks,
 			MAX_PHYS_LINE_TRUNK_TABLE);
 
+	/* Send a seize message to the destination */
+	/* Todo Note: This doesn't handle groups of trunks yet. */
+	uint32_t pm_res = this->send_peer_message(
+			conn_info,
+			conn_info->route_info.dest_equip_type,
+			conn_info->route_info.dest_phys_lines_trunks[0],
+			PM_SEIZE);
+	switch(pm_res) {
+	case PMR_OK:
+		res = ROUTE_DEST_CONNECTED;
+		break;
+
+	case PMR_BUSY:
+		res = ROUTE_DEST_BUSY;
+		break;
+
+	default:
+		LOG_PANIC(TAG, "Bad return value");
+		break;
+	}
 
 	ri->state = res;
 	return res;
@@ -212,9 +232,36 @@ uint32_t Connector::connect(Conn_Info *conn_info) {
 /* This function sends a message to the other end of the connection */
 /* For use by lines and trunks only in the event process. Does not respect locking */
 
-uint32_t Connector::send_peer_message(Conn_Info *conn_info, uint8_t message) {
+uint32_t Connector::send_peer_message(Conn_Info *conn_info, uint32_t dest_equip_type,
+		uint32_t dest_phys_line_trunk_number, uint32_t message) {
 
-	return 0;
+	if(!conn_info) {
+		LOG_PANIC(TAG, "Null pointer passed in");
+	}
+
+	uint32_t pm_res;
+
+	switch(dest_equip_type) {
+	case ET_LINE:
+		if(dest_phys_line_trunk_number >= Sub_Line::MAX_DUAL_LINE_CARDS * 2) {
+			LOG_PANIC(TAG, "Bad parameter value");
+		}
+		pm_res = Sub_line.peer_message_handler(conn_info, dest_phys_line_trunk_number, message);
+		break;
+
+	case ET_TRUNK:
+		if(dest_phys_line_trunk_number >= Trunk::MAX_TRUNK_CARDS) {
+			LOG_PANIC(TAG, "Bad parameter value");
+		}
+		pm_res = Trunks.peer_message_handler(conn_info, dest_phys_line_trunk_number, message);
+		break;
+
+	default:
+		LOG_PANIC(TAG, "Invalid equipment type");
+		break;
+	}
+
+	return pm_res;
 
 }
 

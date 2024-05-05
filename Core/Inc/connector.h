@@ -6,10 +6,14 @@ namespace Connector {
 const uint8_t MAX_DIALED_DIGITS = 15;
 const uint8_t MAX_PHYS_LINE_TRUNK_TABLE = 3;
 
-
+/* Route and connection return values */
 enum {ROUTE_INDETERMINATE = 0, ROUTE_VALID, ROUTE_INVALID, ROUTE_DEST_CONNECTED, ROUTE_DEST_BUSY, ROUTE_DEST_CONGESTED};
-enum {DT_UNDEF=0, DT_LINE, DT_TRUNK};
-
+/* Equipment types */
+enum {ET_UNDEF=0, ET_LINE, ET_TRUNK};
+/* Peer messages */
+enum {PM_NOP=0,PM_SEIZE, PM_RELEASE};
+/* Peer message return values */
+enum {PMR_NOP=0, PMR_OK, PMR_BUSY};
 
 typedef void (*Conn_Handler_Type)(uint32_t event, uint32_t equip_type, uint32_t phys_line_trunk_num);
 
@@ -64,7 +68,8 @@ public:
 	uint32_t test(Conn_Info *conn_info, const char *digits_received);
 	uint32_t connect(Conn_Info *conn_info);
 	/* For use by lines and trunks only in the event process. Does not respect locking */
-	uint32_t send_peer_message(Conn_Info *conn_info, uint8_t message);
+	uint32_t send_peer_message(Conn_Info *conn_info, uint32_t dest_equip_type,
+			uint32_t dest_phys_line_trunk_number, uint32_t message);
 
 };
 

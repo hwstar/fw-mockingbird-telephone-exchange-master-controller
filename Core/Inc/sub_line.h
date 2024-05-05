@@ -37,7 +37,7 @@ public:
 	void set_power_state(uint32_t line, bool state);
 	void _digit_receiver_callback(int32_t descriptor, char digit, uint32_t parameter);
 	void poll(void);
-	uint32_t peer_message_handler(Connector::Conn_Info conn_info, uint32_t message);
+	uint32_t peer_message_handler(Connector::Conn_Info *conn_info, uint32_t phys_line_trunk_number, uint32_t message);
 };
 
 
