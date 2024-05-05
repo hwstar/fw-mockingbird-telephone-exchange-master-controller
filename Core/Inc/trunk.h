@@ -33,11 +33,13 @@ protected:
 
 
 
+
 public:
 	void _mf_receiver_callback(uint32_t descriptor, uint8_t error_code, uint8_t digit_count, char *data);
 	void event_handler(uint32_t event_type, uint32_t resource);
 	void init(void);
 	void poll(void);
+	uint32_t peer_message_handler(Connector::Conn_Info conn_info, uint32_t message);
 
 };
 

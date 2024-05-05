@@ -16,7 +16,8 @@ enum {EV_NONE=0, EV_READY=1, EV_REQUEST_OR=2, EV_DIALED_DIGIT=2, EV_HOOKFLASH=3,
 
 
 /* States */
-enum {LS_IDLE=0, LS_SEIZE_JUNCTOR, LS_SEIZE_TG, LS_SEIZE_DTMFR, LS_WAIT_ROUTE, LS_RESET};
+enum {LS_IDLE=0, LS_SEIZE_JUNCTOR, LS_SEIZE_TG, LS_SEIZE_DTMFR, LS_WAIT_FIRST_DIGIT,
+	LS_WAIT_ROUTE, LS_SEND_BUSY, LS_SEND_CONGESTION, LS_WAIT_HANGUP, LS_RESET};
 
 
 class Sub_Line {
@@ -25,6 +26,9 @@ protected:
 	osEventFlagsId_t _event_flags;
 	uint8_t _line_to_service;
 	Connector::Conn_Info _conn_info[MAX_DUAL_LINE_CARDS * 2];
+	void _release_dtmf_receiver(Connector::Conn_Info *linfo);
+	void _release_tone_generator(Connector::Conn_Info *linfo);
+
 
 
 public:
@@ -33,6 +37,7 @@ public:
 	void set_power_state(uint32_t line, bool state);
 	void _digit_receiver_callback(int32_t descriptor, char digit, uint32_t parameter);
 	void poll(void);
+	uint32_t peer_message_handler(Connector::Conn_Info conn_info, uint32_t message);
 };
 
 

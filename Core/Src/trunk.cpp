@@ -5,6 +5,7 @@
 #include "drv_dtmf.h"
 #include "tone_plant.h"
 #include "xps_logical.h"
+#include "connector.h"
 #include "trunk.h"
 
 Trunk::Trunk Trunks;
@@ -79,6 +80,15 @@ void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
 
 }
 
+/* This handler receives messages from the connection peer */
+
+uint32_t Trunk::peer_message_handler(Connector::Conn_Info conn_info, uint32_t message) {
+	/* Todo: add logic here*/
+
+	return 0;
+}
+
+
 /*
  * Called once after RTOS is up.
  */
@@ -130,6 +140,7 @@ void Trunk::poll(void) {
 	case TS_SEIZE_JUNCTOR:
 		if(Xps_logical.seize(&tinfo->jinfo)) {
 			tinfo->junctor_seized = true;
+			Conn.prepare(tinfo, Connector::DT_TRUNK, this->_trunk_to_service);
 			tinfo->state = TS_SEIZE_MFR;
 		}
 		break;
