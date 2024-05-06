@@ -15,8 +15,15 @@ const char *TAG = "connector";
 /* Todo: Can't be hard coded in real implementation. Real implementation needs to be a linked list in RAM */
 
 static const Route_Table_Entry route_table_entries[] = {
-{"2980400", ET_LINE, 0, 0, 1, {6}},
-{"2980401", ET_LINE, 0, 0, 1, {7}},
+{"2980406", ET_LINE, 0, 0, 1, {6}},
+{"2980407", ET_LINE, 0, 0, 1, {7}},
+{"2980400", ET_LINE, 0, 0, 1, {0}},
+{"2980401", ET_LINE, 0, 0, 1, {1}},
+{"2980402", ET_LINE, 0, 0, 1, {2}},
+{"2980403", ET_LINE, 0, 0, 1, {3}},
+{"2980404", ET_LINE, 0, 0, 1, {4}},
+{"2980405", ET_LINE, 0, 0, 1, {5}},
+
 {"", ET_UNDEF, 0, 0, 0, {0}}, /* Marks the end of the route table */
 
 
@@ -264,6 +271,77 @@ uint32_t Connector::send_peer_message(Conn_Info *conn_info, uint32_t dest_equip_
 	return pm_res;
 
 }
+
+/*
+ * Return the equipment type of the caller
+ */
+uint32_t Connector::get_caller_equip_type(Conn_Info *conn_info) {
+	if(!conn_info) {
+		LOG_PANIC(TAG, "Null pointer passed in");
+	}
+	return conn_info->route_info.source_equip_type;
+
+}
+
+/*
+ * Return the equipment type of the called party
+ */
+
+uint32_t Connector::get_called_equip_type(Conn_Info *conn_info) {
+	if(!conn_info) {
+		LOG_PANIC(TAG, "Null pointer passed in");
+	}
+	return conn_info->route_info.dest_equip_type;
+
+}
+
+/*
+ * Return the caller's physical line or trunk number
+ */
+
+uint32_t Connector::get_caller_phys_line_trunk(Conn_Info *conn_info) {
+	if(!conn_info) {
+		LOG_PANIC(TAG, "Null pointer passed in");
+	}
+	return conn_info->route_info.source_phys_line_number;
+}
+
+
+/*
+ * Return the called party's physical line or trunk number
+ */
+
+uint32_t Connector::get_called_phys_line_trunk(Conn_Info *conn_info) {
+	if(!conn_info) {
+		LOG_PANIC(TAG, "Null pointer passed in");
+	}
+	/* Todo: does not support multiple trunks */
+	return conn_info->route_info.dest_phys_lines_trunks[0];
+}
+
+
+/*
+ * Connect called party to junctor
+ */
+
+void Connector::connect_called_party_audio(Conn_Info *linfo) {
+	if(!linfo) {
+			LOG_PANIC(TAG, "Null pointer passed in");
+		}
+
+	uint32_t called_party_equip_type = Conn.get_called_equip_type(linfo);
+	uint32_t called_party_phys_line_trunk = Conn.get_called_phys_line_trunk(linfo);
+
+	if(called_party_equip_type == ET_TRUNK) {
+		Xps_logical.connect_trunk_term(&linfo->jinfo, called_party_phys_line_trunk);
+	}
+	else if (called_party_equip_type == ET_LINE) {
+		Xps_logical.connect_phone_term(&linfo->jinfo, called_party_phys_line_trunk);
+	}
+
+}
+
+
 
 
 } /* End namespace connector */

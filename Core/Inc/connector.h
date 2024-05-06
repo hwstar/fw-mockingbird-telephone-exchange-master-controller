@@ -11,7 +11,7 @@ enum {ROUTE_INDETERMINATE = 0, ROUTE_VALID, ROUTE_INVALID, ROUTE_DEST_CONNECTED,
 /* Equipment types */
 enum {ET_UNDEF=0, ET_LINE, ET_TRUNK};
 /* Peer messages */
-enum {PM_NOP=0,PM_SEIZE, PM_RELEASE};
+enum {PM_NOP=0,PM_SEIZE, PM_RELEASE, PM_ANSWERED, PM_CALLED_PARTY_HUNGUP};
 /* Peer message return values */
 enum {PMR_NOP=0, PMR_OK, PMR_BUSY};
 
@@ -70,6 +70,13 @@ public:
 	/* For use by lines and trunks only in the event process. Does not respect locking */
 	uint32_t send_peer_message(Conn_Info *conn_info, uint32_t dest_equip_type,
 			uint32_t dest_phys_line_trunk_number, uint32_t message);
+	uint32_t get_caller_equip_type(Conn_Info *conn_info);
+	uint32_t get_caller_phys_line_trunk(Conn_Info *conn_info);
+	uint32_t get_called_equip_type(Conn_Info *conn_info);
+	uint32_t get_called_phys_line_trunk(Conn_Info *conn_info);
+	void connect_called_party_audio(Conn_Info *linfo);
+
+
 
 };
 
