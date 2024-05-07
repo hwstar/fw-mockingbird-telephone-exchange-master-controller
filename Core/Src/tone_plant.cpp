@@ -818,6 +818,7 @@ void Tone_Plant::send_call_progress_tones(uint32_t descriptor, uint8_t type) {
 		LOG_PANIC(TAG, "Invalid descriptor");
 	}
 
+	/* LOG_DEBUG(TAG, "send call progress tones: descriptor: %u, type: %u", descriptor, type); */
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 
 	channelInfo *ch_info = &this->_channel_info[descriptor];
@@ -1087,6 +1088,7 @@ bool Tone_Plant::send_buffer_ulaw(int32_t descriptor,
 	if(!buffer) {
 		return false;
 	}
+
 	this->send_ulaw(descriptor, buffer, size, callback, level);
 
 	return true;
@@ -1167,6 +1169,8 @@ bool Tone_Plant::send_buffer_loop_ulaw(int32_t descriptor, const char *buffer_na
 		return false;
 	}
 
+	/* LOG_DEBUG(TAG, "send buffer loop ulaw: descriptor: %u", descriptor); */
+
 	this->send_loop_ulaw(descriptor, buffer, size, level);
 
 	return true;
@@ -1180,6 +1184,7 @@ void Tone_Plant::stop(int32_t descriptor) {
 	if(!this->_validate_descriptor(descriptor)) {
 		LOG_PANIC(TAG, "Invalid descriptor");
 	}
+	/* LOG_DEBUG(TAG, "stop: descriptor: %u", descriptor); */
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 
 	channelInfo *ch_info = &this->_channel_info[descriptor];
@@ -1226,6 +1231,7 @@ int32_t Tone_Plant::channel_seize(int32_t requested_channel) {
 	if(descriptor >= (int32_t) NUM_TONE_OUTPUTS) {
 		descriptor = -1;
 	}
+	/* LOG_DEBUG(TAG, "channel seize descriptor: %u", descriptor); */
 	return descriptor;
 }
 
@@ -1241,6 +1247,8 @@ void Tone_Plant::channel_release(int32_t descriptor) {
 	if(!this->_validate_descriptor(descriptor)){
 		LOG_PANIC(TAG, "Invalid descriptor");
 	}
+
+	/* LOG_DEBUG(TAG, "channel release descriptor: %u", descriptor); */
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 

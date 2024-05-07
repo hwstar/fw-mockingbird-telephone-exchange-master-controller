@@ -46,41 +46,6 @@ void Sub_Line::_digit_receiver_callback(int32_t descriptor, char digit, uint32_t
 	}
 }
 
-/*
- * Release DTMF receiver and disconnect it from the junctor if seized
- */
-
-void Sub_Line::_release_dtmf_receiver(Connector::Conn_Info *linfo) {
-	if(!linfo) {
-		LOG_PANIC(TAG, "Null pointer passed in");
-	}
-	if(linfo->dtmf_receiver_descriptor != -1) {
-		Xps_logical.disconnect_dtmf_receiver(&linfo->jinfo);
-		Dtmf_receivers.release(linfo->dtmf_receiver_descriptor);
-		linfo->dtmf_receiver_descriptor = -1;
-
-	}
-
-}
-
-/*
- * Release tone generator and disconnect it from the junctor if seized
- */
-
-void Sub_Line::_release_tone_generator(Connector::Conn_Info *linfo) {
-	if(!linfo) {
-		LOG_PANIC(TAG, "Null pointer passed in");
-	}
-	if(linfo->tone_plant_descriptor != -1) {
-		Xps_logical.disconnect_tone_plant_output(&linfo->jinfo);
-		Tone_plant.channel_release(linfo->tone_plant_descriptor);
-		linfo->tone_plant_descriptor = -1;
-
-
-	}
-}
-
-
 
 /*
  * Event handler, receives events from a line on a dual line card
@@ -111,8 +76,20 @@ void Sub_Line::event_handler(uint32_t event_type, uint32_t resource) {
 		case LS_SEND_BUSY:
 		case LS_SEND_CONGESTION:
 		case LS_WAIT_HANGUP:
+		case LS_FAR_END_DISCONNECT:
+		case LS_FAR_END_DISCONNECT_B:
 			linfo->state = LS_RESET;
 			break;
+
+		/* Calling party hung up*/
+		case LS_ORIG_DISCONNECT:
+		case LS_ORIG_DISCONNECT_B:
+		case LS_ORIG_DISCONNECT_C:
+		case LS_ORIG_DISCONNECT_D:
+			linfo->state = LS_ORIG_DISCONNECT_E;
+			break;
+
+
 
 		case LS_WAIT_ANSWER: /* Calling party perspective */
 		case LS_CALLED_PARTY_ANSWERED:
@@ -174,7 +151,8 @@ uint32_t Sub_Line::peer_message_handler(Connector::Conn_Info *conn_info, uint32_
 
 	case Connector::PM_RELEASE:
 		if((linfo->state == LS_ANSWERED) || (linfo->state == LS_RING)  || (linfo->state == LS_RINGING)) {
-			linfo->state = LS_CALL_ENDED;
+			linfo->state = LS_ORIG_DISCONNECT;
+
 		}
 		else {
 			LOG_ERROR(TAG, "Bad message");
@@ -195,7 +173,7 @@ uint32_t Sub_Line::peer_message_handler(Connector::Conn_Info *conn_info, uint32_
 
 	case Connector::PM_CALLED_PARTY_HUNGUP:
 		if(linfo->state == LS_WAIT_END_CALL) {
-			linfo->state = LS_RESET;
+			linfo->state = LS_FAR_END_DISCONNECT;
 		}
 		else {
 			LOG_ERROR(TAG, "Bad Message");
@@ -269,7 +247,7 @@ void Sub_Line::poll(void) {
 
 	case LS_SEIZE_DTMFR: /* Caller perspective */
 		if((linfo->dtmf_receiver_descriptor = Dtmf_receivers.seize(__digit_receiver_callback, this->_line_to_service)) > -1) {
-			Tone_plant.send_call_progress_tones(linfo->dtmf_receiver_descriptor, Tone_Plant::CPT_DIAL_TONE);
+			Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_DIAL_TONE);
 			/* Connect phone to junctor */
 			Xps_logical.connect_phone_orig(&linfo->jinfo, this->_line_to_service);
 			/* Connect DTMF receiver to junctor */
@@ -314,7 +292,7 @@ void Sub_Line::poll(void) {
 		case Connector::ROUTE_INVALID:
 		default:
 			/* Release DTMF Receiver */
-			this->_release_dtmf_receiver(linfo);
+			Conn.release_dtmf_receiver(linfo);
 			/* Send congestion */
 			/* Could be a call cannot be completed as dialed in the future once we have the SPI SRAM */
 			linfo->state = LS_SEND_CONGESTION;
@@ -322,9 +300,9 @@ void Sub_Line::poll(void) {
 
 		case Connector::ROUTE_VALID:
 			/* Release the DTMF Receiver */
-			this->_release_dtmf_receiver(linfo);
-			/* Todo connect the call */
-			switch(Conn.connect(linfo)) {
+			Conn.release_dtmf_receiver(linfo);
+			/* Resolve the call */
+			switch(Conn.resolve(linfo)) {
 
 			case Connector::ROUTE_INVALID:
 				linfo->state = LS_SEND_CONGESTION;
@@ -333,13 +311,14 @@ void Sub_Line::poll(void) {
 			case Connector::ROUTE_DEST_CONNECTED:
 				{
 					uint32_t equip_type = Conn.get_called_equip_type(linfo);
+					/* Todo: Make this a function in connector.cpp */
 					if(equip_type == Connector::ET_LINE) {
 						/* Send ringing */
 						Tone_plant.send_buffer_loop_ulaw(linfo->tone_plant_descriptor, "city_ring", 0.0);
 					} else if(equip_type == Connector::ET_TRUNK) {
 						/* A trunk destination means we don't need the tone generator any more.
 						 * Release it so it can be be available for MF tone generation */
-						this->_release_tone_generator(linfo);
+						Conn.release_tone_generator(linfo);
 					}
 				}
 
@@ -362,9 +341,9 @@ void Sub_Line::poll(void) {
 		break;
 
 	case LS_SEND_BUSY: /* Caller perspective */
-			Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_BUSY);
-			linfo->state = LS_WAIT_HANGUP;
-			break;
+		Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_BUSY);
+		linfo->state = LS_WAIT_HANGUP;
+		break;
 
 
 	case LS_SEND_CONGESTION: /* Caller perspective */
@@ -380,7 +359,7 @@ void Sub_Line::poll(void) {
 
 		/* Stop tone generator and release it */
 		Tone_plant.stop(linfo->tone_plant_descriptor);
-		this->_release_tone_generator(linfo);
+		Conn.release_tone_generator(linfo);
 
 		/* Send in call state to line card */
 		Card_comm.send_command(Card_Comm::RT_LINE, this->_line_to_service, REG_SET_IN_CALL);
@@ -393,6 +372,21 @@ void Sub_Line::poll(void) {
 
 	case LS_WAIT_END_CALL: /* Caller perspective */
 		/* Wait here while in call*/
+		break;
+
+	case LS_FAR_END_DISCONNECT: /* Caller perspective */
+		/* Re-acquire a tone generator */
+		if((linfo->tone_plant_descriptor = Tone_plant.channel_seize()) > -1) {
+				linfo->state = LS_FAR_END_DISCONNECT_B;
+			}
+		break;
+
+	case LS_FAR_END_DISCONNECT_B: /* Caller perspective */
+		/* Disconnect the called party from the junctor */
+		Conn.disconnect_called_party_audio(linfo);
+		/* Reconnect tone plant to junctor */
+		Xps_logical.connect_tone_plant_output(&linfo->jinfo, linfo->tone_plant_descriptor);
+		linfo->state = LS_SEND_CONGESTION;
 		break;
 
 
@@ -411,7 +405,8 @@ void Sub_Line::poll(void) {
 		/* There was an error, wait until caller hangs up */
 		break;
 
-	/*
+	/*	linfo->state = LS_ORIG_DISCONNECT_E;
+
 	 * Called party perspective
 	 */
 
@@ -448,11 +443,49 @@ void Sub_Line::poll(void) {
 		}
 		break;
 
-	case LS_CALL_ENDED: /* Called perspective */
-		/* Send End Call to Caller */
+
+
+	case LS_ORIG_DISCONNECT: /* Called perspective */
+		/* Send congestion to called party after caller hangs up */
+		/* We don't tell the line card to end the call right away */
+		/* We wait until we see the hangup event from the called party */
+		/* then we send end call */
+		/* Seize a junctor */
+
+		if(Xps_logical.seize(&linfo->jinfo)) {
+			Conn.prepare(linfo, Connector::ET_LINE, this->_line_to_service);
+			linfo->junctor_seized = true;
+			linfo->state = LS_ORIG_DISCONNECT_B;
+		}
+		break;
+
+	case LS_ORIG_DISCONNECT_B: /* Called perspective */
+		/* Seize a tone generator */
+		if((linfo->tone_plant_descriptor = Tone_plant.channel_seize()) > -1) {
+			linfo->state = LS_ORIG_DISCONNECT_C;
+		}
+		break;
+
+	case LS_ORIG_DISCONNECT_C: /* Called perspective */
+		/* Connect phone to junctor */
+		Xps_logical.connect_phone_orig(&linfo->jinfo, this->_line_to_service);
+		/* Connect tone plant to junctor */
+		Xps_logical.connect_tone_plant_output(&linfo->jinfo, linfo->tone_plant_descriptor);
+		/* Send Congestion */
+		Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_CONGESTION);
+		linfo->state = LS_ORIG_DISCONNECT_D;
+
+		break;
+
+	case LS_ORIG_DISCONNECT_D: /* Called perspective */
+		/* Wait for called party to hang up */
+		break;
+
+	case LS_ORIG_DISCONNECT_E: /*Called perspective */
+		/* Tell the line card we're done with this call */
 		Card_comm.send_command(Card_Comm::RT_LINE, this->_line_to_service, REG_END_CALL);
 		linfo->state = LS_RESET;
-		break;
+
 
 	case LS_RESET:
 		/* Release any resources first */

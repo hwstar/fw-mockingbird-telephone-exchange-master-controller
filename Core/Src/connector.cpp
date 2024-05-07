@@ -3,6 +3,9 @@
 #include "logging.h"
 #include "util.h"
 #include "xps_logical.h"
+#include "tone_plant.h"
+#include "mf_receiver.h"
+#include "drv_dtmf.h"
 #include "sub_line.h"
 #include "trunk.h"
 
@@ -178,7 +181,7 @@ uint32_t Connector::test(Conn_Info *conn_info, const char *digits_received) {
 }
 
 /*
- * Connect an originating call to the desired termination.
+ * Resolve an originating call to get to the desired termination.
  *
  * Returns a result code which must be checked.
  *
@@ -191,7 +194,7 @@ uint32_t Connector::test(Conn_Info *conn_info, const char *digits_received) {
  */
 
 
-uint32_t Connector::connect(Conn_Info *conn_info) {
+uint32_t Connector::resolve(Conn_Info *conn_info) {
 
 	if(!conn_info) {
 		LOG_PANIC(TAG, "Null pointer passed in");
@@ -340,6 +343,125 @@ void Connector::connect_called_party_audio(Conn_Info *linfo) {
 	}
 
 }
+
+/*
+ * Disconnect called party from junctor
+ */
+
+
+void Connector::disconnect_called_party_audio(Conn_Info *linfo) {
+	if(!linfo) {
+			LOG_PANIC(TAG, "Null pointer passed in");
+		}
+
+	uint32_t called_party_equip_type = Conn.get_called_equip_type(linfo);
+
+	if(called_party_equip_type == ET_TRUNK) {
+		Xps_logical.disconnect_trunk_term(&linfo->jinfo);
+	}
+	else if (called_party_equip_type == ET_LINE) {
+		Xps_logical.disconnect_phone_term(&linfo->jinfo);
+	}
+
+}
+
+
+/*
+ * Connect called party to junctor
+ */
+
+void Connector::connect_caller_party_audio(Conn_Info *linfo) {
+	if(!linfo) {
+			LOG_PANIC(TAG, "Null pointer passed in");
+		}
+
+	uint32_t caller_party_equip_type = Conn.get_caller_equip_type(linfo);
+	uint32_t caller_party_phys_line_trunk = Conn.get_caller_phys_line_trunk(linfo);
+
+	if(caller_party_equip_type == ET_TRUNK) {
+		Xps_logical.connect_trunk_orig(&linfo->jinfo, caller_party_phys_line_trunk);
+	}
+	else if (caller_party_equip_type == ET_LINE) {
+		Xps_logical.connect_phone_orig(&linfo->jinfo, caller_party_phys_line_trunk);
+	}
+
+}
+
+/*
+ * Disconnect called party from junctor
+ */
+
+
+void Connector::disconnect_caller_party_audio(Conn_Info *linfo) {
+	if(!linfo) {
+			LOG_PANIC(TAG, "Null pointer passed in");
+		}
+
+	uint32_t caller_party_equip_type = Conn.get_caller_equip_type(linfo);
+
+	if(caller_party_equip_type == ET_TRUNK) {
+		Xps_logical.disconnect_trunk_orig(&linfo->jinfo);
+	}
+	else if (caller_party_equip_type == ET_LINE) {
+		Xps_logical.disconnect_phone_orig(&linfo->jinfo);
+	}
+
+}
+
+/*
+ * Release MF receiver and disconnect it from the junctor if seized
+ */
+
+void Connector::release_mf_receiver(Conn_Info *linfo) {
+	if(!linfo) {
+		LOG_PANIC(TAG, "Null pointer passed in");
+	}
+	if(linfo->mf_receiver_descriptor != -1) {
+		Xps_logical.disconnect_mf_receiver(&linfo->jinfo);
+		MF_decoder.release(linfo->mf_receiver_descriptor);
+		linfo->mf_receiver_descriptor = -1;
+
+	}
+
+}
+
+
+
+/*
+ * Release DTMF receiver and disconnect it from the junctor if seized
+ */
+
+void Connector::release_dtmf_receiver(Conn_Info *linfo) {
+	if(!linfo) {
+		LOG_PANIC(TAG, "Null pointer passed in");
+	}
+	if(linfo->dtmf_receiver_descriptor != -1) {
+		Xps_logical.disconnect_dtmf_receiver(&linfo->jinfo);
+		Dtmf_receivers.release(linfo->dtmf_receiver_descriptor);
+		linfo->dtmf_receiver_descriptor = -1;
+
+	}
+
+}
+
+/*
+ * Release tone generator and disconnect it from the junctor if seized
+ */
+
+void Connector::release_tone_generator(Conn_Info *linfo) {
+	if(!linfo) {
+		LOG_PANIC(TAG, "Null pointer passed in");
+	}
+	if(linfo->tone_plant_descriptor != -1) {
+		Xps_logical.disconnect_tone_plant_output(&linfo->jinfo);
+		Tone_plant.channel_release(linfo->tone_plant_descriptor);
+		linfo->tone_plant_descriptor = -1;
+
+
+	}
+}
+
+
 
 
 

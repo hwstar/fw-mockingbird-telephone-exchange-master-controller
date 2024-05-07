@@ -66,7 +66,7 @@ public:
 	void init(void);
 	void prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32_t source_phys_line_number);
 	uint32_t test(Conn_Info *conn_info, const char *digits_received);
-	uint32_t connect(Conn_Info *conn_info);
+	uint32_t resolve(Conn_Info *conn_info);
 	/* For use by lines and trunks only in the event process. Does not respect locking */
 	uint32_t send_peer_message(Conn_Info *conn_info, uint32_t dest_equip_type,
 			uint32_t dest_phys_line_trunk_number, uint32_t message);
@@ -75,6 +75,12 @@ public:
 	uint32_t get_called_equip_type(Conn_Info *conn_info);
 	uint32_t get_called_phys_line_trunk(Conn_Info *conn_info);
 	void connect_called_party_audio(Conn_Info *linfo);
+	void disconnect_called_party_audio(Conn_Info *linfo);
+	void connect_caller_party_audio(Conn_Info *linfo);
+	void disconnect_caller_party_audio(Conn_Info *linfo);
+	void release_mf_receiver(Conn_Info *linfo);
+	void release_dtmf_receiver(Conn_Info *linfo);
+	void release_tone_generator(Conn_Info *linfo);
 
 
 
