@@ -90,9 +90,8 @@ void Sub_Line::event_handler(uint32_t event_type, uint32_t resource) {
 			break;
 
 
-
 		case LS_WAIT_ANSWER: /* Calling party perspective */
-		case LS_CALLED_PARTY_ANSWERED:
+		case LS_CALLED_PARTY_ANSWERED: /* Calling party perspective */
 		case LS_WAIT_END_CALL:
 			linfo->state = LS_END_CALL;
 			break;
@@ -150,9 +149,14 @@ uint32_t Sub_Line::peer_message_handler(Connector::Conn_Info *conn_info, uint32_
 		break;
 
 	case Connector::PM_RELEASE:
-		if((linfo->state == LS_ANSWERED) || (linfo->state == LS_RING)  || (linfo->state == LS_RINGING)) {
+		if(linfo->state == LS_ANSWERED) {
+			/* Send congestion to called party */
 			linfo->state = LS_ORIG_DISCONNECT;
 
+		}
+		else if ((linfo->state == LS_RING)  || (linfo->state == LS_RINGING)) {
+			/* Caller hung up while called line was ringing */
+			linfo->state = LS_ORIG_DISCONNECT_E;
 		}
 		else {
 			LOG_ERROR(TAG, "Bad message");
@@ -341,12 +345,14 @@ void Sub_Line::poll(void) {
 		break;
 
 	case LS_SEND_BUSY: /* Caller perspective */
+		/* Tell tone plant to send call busy tone */
 		Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_BUSY);
 		linfo->state = LS_WAIT_HANGUP;
 		break;
 
 
 	case LS_SEND_CONGESTION: /* Caller perspective */
+		/* Tell tone plant to send congestion tone */
 		Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_CONGESTION);
 		linfo->state = LS_WAIT_HANGUP;
 		break;
