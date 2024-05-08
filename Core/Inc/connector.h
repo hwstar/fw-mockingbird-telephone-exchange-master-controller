@@ -54,6 +54,7 @@ typedef struct Conn_Info {
 	char digit_buffer[MAX_DIALED_DIGITS + 1];
 	Route_Info route_info;
 	struct Conn_Info *peer;
+	osTimerId_t dial_timer;
 }Conn_Info;
 
 

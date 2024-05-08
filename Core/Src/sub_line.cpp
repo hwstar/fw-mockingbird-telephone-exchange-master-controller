@@ -47,6 +47,43 @@ void Sub_Line::_digit_receiver_callback(int32_t descriptor, char digit, uint32_t
 }
 
 
+
+
+static void __dial_timer_callback(void *arg) {
+	Sub_line._dial_timer_callback(arg);
+
+}
+
+/*
+ * Called when dial timer expires
+ */
+
+void Sub_Line::_dial_timer_callback(void *arg) {
+	Connector::Conn_Info *linfo = (Connector::Conn_Info *) arg;
+
+	osMutexAcquire(this->_lock, osWaitForever); /*Get the lock */
+
+	switch(linfo->state) {
+
+	case LS_WAIT_FIRST_DIGIT: /* Calling party perspective */
+	case LS_WAIT_ROUTE:
+		linfo->state = LS_DIAL_TIMEOUT;
+		break;
+
+	case LS_WAIT_HANGUP: /* Calling party perspective */
+		linfo->state = LS_CONGESTION_DISCONNECT;
+		break;
+
+
+	case LS_ORIG_DISCONNECT_D: /* Called party perspective */
+		linfo->state = LS_ORIG_DISCONNECT_F;
+		break;
+
+
+	}
+	osMutexRelease(this->_lock); /* Release the lock */
+}
+
 /*
  * Event handler, receives events from a line on a dual line card
  */
@@ -73,8 +110,10 @@ void Sub_Line::event_handler(uint32_t event_type, uint32_t resource) {
 		case LS_SEIZE_DTMFR:
 		case LS_WAIT_FIRST_DIGIT:
 		case LS_WAIT_ROUTE:
+		case LS_DIAL_TIMEOUT:
 		case LS_SEND_BUSY:
 		case LS_SEND_CONGESTION:
+		case LS_CONGESTION_DISCONNECT:
 		case LS_WAIT_HANGUP:
 		case LS_FAR_END_DISCONNECT:
 		case LS_FAR_END_DISCONNECT_B:
@@ -86,6 +125,7 @@ void Sub_Line::event_handler(uint32_t event_type, uint32_t resource) {
 		case LS_ORIG_DISCONNECT_B:
 		case LS_ORIG_DISCONNECT_C:
 		case LS_ORIG_DISCONNECT_D:
+		case LS_ORIG_DISCONNECT_F:
 			linfo->state = LS_ORIG_DISCONNECT_E;
 			break;
 
@@ -206,9 +246,17 @@ void Sub_Line::init(void) {
 	/* Create event flags */
 	this->_event_flags = osEventFlagsNew(&event_flags_attributes);
 
+	/* Initialization of line-specific information */
 	for(uint8_t index = 0; index < MAX_DUAL_LINE_CARDS * 2; index++) {
 		Connector::Conn_Info *linfo = &this->_conn_info[index];
 
+		/* Digit dialing timer */
+		linfo->dial_timer = osTimerNew(__dial_timer_callback, osTimerOnce, linfo, NULL);
+		if(linfo->dial_timer == NULL) {
+			LOG_PANIC(TAG, "Could not create timer");
+		}
+
+		/* Variables */
 		linfo->state = LS_IDLE;
 		linfo->tone_plant_descriptor = linfo->mf_receiver_descriptor = linfo->dtmf_receiver_descriptor = -1;
 	}
@@ -264,6 +312,8 @@ void Sub_Line::poll(void) {
 			/* Tell the line on the line card that the OR is connected */
 			/* For future dial pulse support */
 			Card_comm.send_command(Card_Comm::RT_LINE, this->_line_to_service, REG_SET_OR_ATTACHED);
+			/* Start the dial timer */
+			osTimerStart(linfo->dial_timer, DTMF_DIGIT_DIAL_TIME);
 			linfo->state = LS_WAIT_FIRST_DIGIT;
 		}
 
@@ -271,6 +321,8 @@ void Sub_Line::poll(void) {
 
 	case LS_WAIT_FIRST_DIGIT: /* Caller perspective */
 		if(linfo->num_dialed_digits) {
+			/* Restart Dial Timer */
+			osTimerStart(linfo->dial_timer, DTMF_DIGIT_DIAL_TIME);
 			/* Break dial tone */
 			Tone_plant.stop(linfo->tone_plant_descriptor);
 			linfo->state = LS_WAIT_ROUTE;
@@ -287,6 +339,10 @@ void Sub_Line::poll(void) {
 		}
 		linfo->prev_num_dialed_digits = linfo->num_dialed_digits;
 
+		/* Restart dial timer */
+		osTimerStart(linfo->dial_timer, DTMF_DIGIT_DIAL_TIME);
+
+		/* Test for a valid route */
 		switch(Conn.test(linfo, linfo->digit_buffer)) {
 
 		case Connector::ROUTE_INDETERMINATE:
@@ -303,6 +359,8 @@ void Sub_Line::poll(void) {
 			break;
 
 		case Connector::ROUTE_VALID:
+			/* Stop the dial timer */
+			osTimerStop(linfo->dial_timer);
 			/* Release the DTMF Receiver */
 			Conn.release_dtmf_receiver(linfo);
 			/* Resolve the call */
@@ -344,6 +402,16 @@ void Sub_Line::poll(void) {
 		}
 		break;
 
+	case LS_DIAL_TIMEOUT:
+		/* Release DTMF Receiver */
+		Conn.release_dtmf_receiver(linfo);
+		/* Stop dial tone generation */
+		Tone_plant.stop(linfo->tone_plant_descriptor);
+		/* Send congestion */
+		linfo->state = LS_SEND_CONGESTION;
+		break;
+
+
 	case LS_SEND_BUSY: /* Caller perspective */
 		/* Tell tone plant to send call busy tone */
 		Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_BUSY);
@@ -353,9 +421,27 @@ void Sub_Line::poll(void) {
 
 	case LS_SEND_CONGESTION: /* Caller perspective */
 		/* Tell tone plant to send congestion tone */
+		osTimerStart(linfo->dial_timer, DTMF_DIGIT_DIAL_TIME);
 		Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_CONGESTION);
 		linfo->state = LS_WAIT_HANGUP;
 		break;
+
+	case LS_CONGESTION_DISCONNECT:
+		/* Stop tone generation */
+		Tone_plant.stop(linfo->tone_plant_descriptor);
+		/* Release tone generator */
+		if(linfo->tone_plant_descriptor != -1) {
+			Tone_plant.channel_release(linfo->tone_plant_descriptor);
+			linfo->tone_plant_descriptor = -1;
+		}
+		/* Release the junctor */
+		if(linfo->junctor_seized) {
+			Xps_logical.release(&linfo->jinfo);
+			linfo->junctor_seized = false;
+		}
+		linfo->state = LS_WAIT_HANGUP;
+
+
 
 	case LS_WAIT_ANSWER: /* Caller perspective */
 		/* Wait here for peer message */
@@ -411,8 +497,8 @@ void Sub_Line::poll(void) {
 		/* There was an error, wait until caller hangs up */
 		break;
 
-	/*	linfo->state = LS_ORIG_DISCONNECT_E;
 
+    /*
 	 * Called party perspective
 	 */
 
@@ -479,7 +565,10 @@ void Sub_Line::poll(void) {
 		Xps_logical.connect_tone_plant_output(&linfo->jinfo, linfo->tone_plant_descriptor);
 		/* Send Congestion */
 		Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_CONGESTION);
+		/* Start the dial timer for congestion time out*/
+		osTimerStart(linfo->dial_timer, DTMF_DIGIT_DIAL_TIME);
 		linfo->state = LS_ORIG_DISCONNECT_D;
+
 
 		break;
 
@@ -491,9 +580,29 @@ void Sub_Line::poll(void) {
 		/* Tell the line card we're done with this call */
 		Card_comm.send_command(Card_Comm::RT_LINE, this->_line_to_service, REG_END_CALL);
 		linfo->state = LS_RESET;
+		break;
+
+	case LS_ORIG_DISCONNECT_F: /* Called perspective */
+		/* Called party did not hang up after the  congestion time out */
+		/*Disconnect tone plant and junctor */
+
+		if(linfo->tone_plant_descriptor != -1) {
+			Tone_plant.channel_release(linfo->tone_plant_descriptor);
+			linfo->tone_plant_descriptor = -1;
+		}
+		if(linfo->junctor_seized) {
+			Xps_logical.release(&linfo->jinfo);
+			linfo->junctor_seized = false;
+		}
+		/* Wait for hangup */
+		linfo->state = LS_ORIG_DISCONNECT_D;
+		break;
+
 
 
 	case LS_RESET:
+		/* Stop dial timer if it was running */
+		osTimerStop(linfo->dial_timer);
 		/* Release any resources first */
 		if(linfo->tone_plant_descriptor != -1) {
 			Tone_plant.channel_release(linfo->tone_plant_descriptor);

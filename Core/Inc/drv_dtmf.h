@@ -18,6 +18,7 @@ public:
 	void poll();
 	int32_t seize(Dtmf_Callback callback, uint32_t parameter = 0, int32_t receiver=-1);
 	void release(int32_t descriptor);
+	uint32_t get_siezed_receivers(void) { return this->_siezed_receivers;};
 
 protected:
 	/* Low level hardware interface functions */

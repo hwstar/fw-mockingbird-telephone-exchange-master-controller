@@ -83,6 +83,7 @@ int32_t seize(Mf_Callback callback, int channel = -1, bool re_arm=false); /* Cal
 void release(int32_t descriptor); /* Called to release the MF receiver */
 void handle_buffer(ADC_HandleTypeDef *hadc, uint8_t buffer_no); /* Called by the DMA engine when half full and full.*/
 void receiver_worker(void *args)  __attribute__((section(".xccmram")));
+uint32_t get_seized_receivers(void) {return this->_rx_in_use_bits;};
 
 protected:
 
