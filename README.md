@@ -6,7 +6,9 @@ Mocking Bird Telephone Exchange Master Controller
 Features:
 
 * Runs on a STM32F767ZI Nucleo board
-* Perform 2 channels of Multi-Frequency (MF) decoding using the Goertzel algorithm using an ADC input. (70 mS min tone on and off times)
+* IDE: STM32 Cube IDE MX Development environment using Eclipse. (Needed for DMA support)
+* FreeRTOS real time operating system using the CMSIS V2 interface.
+* Supports 2 channels of Multi-Frequency (MF) decoding using the Goertzel algorithm using an ADC input. (70 mS min tone on and off times)
 * Communicates with Subscriber line and E&M trunk cards designed by me. (More information forthcoming on them).
 * Interfaces with 2 Zarlink MT88L70 DTMF decoders
 * Tone Plant
