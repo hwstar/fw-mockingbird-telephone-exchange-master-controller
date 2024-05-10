@@ -599,10 +599,10 @@ static bool command_config_hw_view_present(Holder_Type *vars, uint32_t *error_co
  * MF Receiver callback
  */
 
-static void mf_event_callback(uint32_t descriptor, uint8_t error_code, uint8_t digit_count, char *data) {
+static void mf_event_callback(void *parameter, uint8_t error_code, uint8_t digit_count, char *data) {
 	if(error_code == MF_Decoder::MFE_OK) {
 		/* Can't use printf here must log. */
-		LOG_DEBUG(TAG, "MF Receiver %d: Digit count: %d, MF Digits Received: %s", descriptor, digit_count, data);
+		LOG_DEBUG(TAG, "MF Receiver, Digit count: %d, MF Digits Received: %s", digit_count, data);
 
 	}
 	else {
@@ -642,7 +642,7 @@ static bool command_mfr_seize(Holder_Type *vars, uint32_t *error_code) {
 		MF_decoder.release(descriptor);
 	}
 	/* Attempt to seize or re-seize the MF Receiver */
-	descriptor = MF_decoder.seize(mf_event_callback, (int32_t) channel, true);
+	descriptor = MF_decoder.seize(mf_event_callback, NULL, (int32_t) channel, true);
 	System_console.set_mfr_descriptor(descriptor);
 	if(descriptor == -1) {
 		/* Someone else is using it */

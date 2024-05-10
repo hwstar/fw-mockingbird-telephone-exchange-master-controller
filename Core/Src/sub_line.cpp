@@ -257,6 +257,7 @@ void Sub_Line::init(void) {
 		}
 
 		/* Variables */
+		linfo->phys_line_trunk_number = index;
 		linfo->state = LS_IDLE;
 		linfo->tone_plant_descriptor = linfo->mf_receiver_descriptor = linfo->dtmf_receiver_descriptor = -1;
 	}

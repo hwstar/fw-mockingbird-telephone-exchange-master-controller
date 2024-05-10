@@ -314,7 +314,7 @@ void MF_Decoder::receiver_worker(void *args) {
 
 			case MFR_DONE:
 				/* Call the user's callback function */
-				(*dp->callback)(descriptor, dp->error_code, dp->digit_count, dp->digits);
+				(*dp->callback)(dp->parameter, dp->error_code, dp->digit_count, dp->digits);
 				if(dp->re_arm) {
 					/* Receiver auto re-arm */
 					dp->state = MFR_WAIT_KP;
@@ -458,7 +458,7 @@ void MF_Decoder::init() {
 * Will return -1 if no receiver is available
 */
 
-int32_t MF_Decoder::seize(Mf_Callback callback, int channel, bool re_arm) {
+int32_t MF_Decoder::seize(Mf_Callback callback, void *parameter, int channel, bool re_arm) {
 
 	int32_t descriptor;
 
@@ -502,6 +502,7 @@ int32_t MF_Decoder::seize(Mf_Callback callback, int channel, bool re_arm) {
 	else {
 		/* Initialize the receiver */
 		this->_mf_data[descriptor].re_arm = re_arm;
+		this->_mf_data[descriptor].parameter = parameter;
 		this->_mf_data[descriptor].error_code = MFE_OK;
 		this->_mf_data[descriptor].callback = callback;
 		this->_mf_data[descriptor].tone_digit = false;
@@ -509,6 +510,7 @@ int32_t MF_Decoder::seize(Mf_Callback callback, int channel, bool re_arm) {
 		this->_mf_data[descriptor].tone_block_count = 0;
 		this->_mf_data[descriptor].timer = 0;
 		this->_mf_data[descriptor].state = MFR_WAIT_KP;
+
 		/* Start transferring data */
 		this->_start_dma_transfers(descriptor);
 	}

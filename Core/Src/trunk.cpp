@@ -1,4 +1,5 @@
 #include "top.h"
+#include "util.h"
 #include "logging.h"
 #include "card_comm.h"
 #include "mf_receiver.h"
@@ -18,24 +19,44 @@ namespace Trunk {
  * Called when there is an MF address to process
  */
 
-static void __mf_receiver_callback(uint32_t descriptor, uint8_t error_code, uint8_t digit_count, char *data) {
-	Trunks._mf_receiver_callback(descriptor, error_code, digit_count, data);
+static void __mf_receiver_callback(void *parameter, uint8_t error_code, uint8_t digit_count, char *data) {
+	Trunks._mf_receiver_callback(parameter, error_code, digit_count, data);
 }
 
 /*
  * Called from __mf_receiver_callback();
  */
 
-void Trunk::_mf_receiver_callback(uint32_t descriptor, uint8_t error_code, uint8_t digit_count, char *data) {
+void Trunk::_mf_receiver_callback(void *parameter, uint8_t error_code, uint8_t digit_count, char *data) {
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 
-
+	if(!parameter) {
+		LOG_PANIC(TAG, "NULL Pointer passed in");
+	}
+	Connector::Conn_Info *tinfo = (Connector::Conn_Info *) parameter;
 
 	if(error_code == MF_Decoder::MFE_OK) {
-		LOG_DEBUG(TAG, "Received MF address: %s from descriptor %u", data, descriptor);
+		LOG_DEBUG(TAG, "Received MF address: %s on trunk %d", data, tinfo->phys_line_trunk_number);
+		if(tinfo->state == TS_WAIT_ADDR_INFO) {
+			/* Copy digit count */
+			tinfo->num_dialed_digits = digit_count;
+			/* Copy address omitting control key values */
+			int sindex, dindex;
+			for(sindex = 0, dindex = 0; ((dindex < Connector::MAX_DIALED_DIGITS) && (data[sindex])); sindex++) {
+				if((data[sindex] < '0') || (data[sindex] > '9')) {
+					continue;
+				}
+				tinfo->digit_buffer[dindex++] = data[sindex];
+			}
+			tinfo->digit_buffer[dindex] = 0;
+
+			/* Set next state */
+			tinfo->state = TS_HAVE_ADDR_INFO;
+		}
+
 	}
 	else {
-		LOG_ERROR(TAG, "Descriptor %d timed out waiting for MF Digits", descriptor);
+		LOG_ERROR(TAG, "Timed out waiting for MF Digits on trunk %d", tinfo->phys_line_trunk_number);
 		/* Todo: This needs to be properly handled */
 	}
 
@@ -69,7 +90,8 @@ void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
 		/* Call dropped by originator, check to see if we need to take action */
 		if((tinfo->state == TS_SEIZE_JUNCTOR) ||
 				(tinfo->state == TS_SEIZE_MFR) ||
-				(tinfo->state == TS_WAIT_ADDR_INFO)) {
+				(tinfo->state == TS_WAIT_ADDR_INFO) ||
+				(tinfo->state == TS_HAVE_ADDR_INFO)) {
 			tinfo->state = TS_RESET;
 		}
 	}
@@ -112,6 +134,7 @@ void Trunk::init(void) {
 		Connector::Conn_Info *tinfo = &this->_conn_info[index];
 
 		tinfo->state = TS_IDLE;
+		tinfo->phys_line_trunk_number = index;
 		tinfo->tone_plant_descriptor = tinfo->mf_receiver_descriptor = tinfo->dtmf_receiver_descriptor = -1;
 
 
@@ -146,13 +169,14 @@ void Trunk::poll(void) {
 		break;
 
 	case TS_SEIZE_MFR: /* Seize MF receiver */
-		if((tinfo->mf_receiver_descriptor = MF_decoder.seize(__mf_receiver_callback)) > -1) {
+		if((tinfo->mf_receiver_descriptor = MF_decoder.seize(__mf_receiver_callback, tinfo )) > -1) {
 			/* Connect trunk RX and TX to assigned junctor */
 			Xps_logical.connect_trunk_orig(&tinfo->jinfo, this->_trunk_to_service);
 			/* Make audio connection to seized MF receiver */
 			Xps_logical.connect_mf_receiver(&tinfo->jinfo, tinfo->mf_receiver_descriptor);
 			/* Tell trunk card to send a wink */
 			Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_SEND_WINK);
+			Conn.prepare(tinfo, Connector::ET_TRUNK, tinfo->phys_line_trunk_number);
 			tinfo->state = TS_WAIT_ADDR_INFO;
 
 		}
@@ -161,6 +185,9 @@ void Trunk::poll(void) {
 	case TS_WAIT_ADDR_INFO:
 		break; /* ToDo */
 
+	case TS_HAVE_ADDR_INFO:
+		Conn.test(tinfo, tinfo->digit_buffer);
+		break;
 
 	case TS_RESET:
 		/* Release any resources first */
@@ -182,6 +209,7 @@ void Trunk::poll(void) {
 			Xps_logical.release(&tinfo->jinfo);
 			tinfo->junctor_seized = false;
 		}
+		tinfo->peer = NULL;
 		tinfo->state = TS_IDLE;
 		break;
 

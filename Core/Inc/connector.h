@@ -1,10 +1,13 @@
 #pragma once
 #include "top.h"
 #include "xps_logical.h"
+#include "pool_alloc.h"
 
 namespace Connector {
 const uint8_t MAX_DIALED_DIGITS = 15;
 const uint8_t MAX_PHYS_LINE_TRUNK_TABLE = 3;
+const uint32_t MAX_ROUTE_NODES = 128;
+const uint32_t MAX_ROUTE_TABLES = 8;
 
 /* Route and connection return values */
 enum {ROUTE_INDETERMINATE = 0, ROUTE_VALID, ROUTE_INVALID, ROUTE_DEST_CONNECTED, ROUTE_DEST_BUSY, ROUTE_DEST_CONGESTED};
@@ -27,6 +30,17 @@ typedef struct Route_Table_Entry {
 	uint8_t phys_lines_trunks[MAX_PHYS_LINE_TRUNK_TABLE];
 } Route_Table_Entry;
 
+typedef struct Route_Table_Node {
+	char match_string[MAX_DIALED_DIGITS + 1];
+	uint8_t dest_equip_type;
+	uint8_t trunk_addressing_start;
+	uint8_t trunk_addressing_end;
+	uint8_t phys_line_trunk_count;
+	uint8_t phys_lines_trunks[MAX_PHYS_LINE_TRUNK_TABLE];
+	struct Route_Table_Node *prev;
+	struct Route_Table_Node *next;
+}Route_Table_Node;
+
 
 typedef struct Route_Info {
 	uint8_t state;
@@ -36,13 +50,14 @@ typedef struct Route_Info {
 	uint8_t dest_line_trunk_count;
 	uint8_t dest_phys_lines_trunks[MAX_PHYS_LINE_TRUNK_TABLE];
 	char dialed_number[MAX_DIALED_DIGITS + 1];
-	const Route_Table_Entry *route_table_entry;
+	const Route_Table_Node *route_table_node;
 
 
 } Route_Info;
 
 
 typedef struct Conn_Info {
+	uint8_t phys_line_trunk_number;
 	uint8_t state;
 	bool junctor_seized;
 	int16_t tone_plant_descriptor;
@@ -60,11 +75,17 @@ typedef struct Conn_Info {
 
 class Connector {
 protected:
-	uint8_t _max_route_length;
 	uint32_t _test_against_route(const char *string_to_test, const char *route_table_entry);
-	uint8_t _calc_max_route_digits(void);
+	uint8_t _routing_pool_memory[MAX_ROUTE_NODES * sizeof(Route_Table_Node)];
+	Pool_Alloc::Pool_Alloc _routing_pool;
+	Route_Table_Node *_route_table_heads[MAX_ROUTE_TABLES];
+	Route_Table_Node *_route_table_tails[MAX_ROUTE_TABLES];
 public:
+
 	void init(void);
+	bool add_route(uint32_t table_number, uint32_t dest_equip_type, uint32_t phys_line_trunk_count,
+			uint32_t trunk_addressing_start, uint32_t trunk_addressing_end, const uint8_t *dest_phys_lines_trunks, const char *match_string );
+
 	void prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32_t source_phys_line_number);
 	uint32_t test(Conn_Info *conn_info, const char *digits_received);
 	uint32_t resolve(Conn_Info *conn_info);

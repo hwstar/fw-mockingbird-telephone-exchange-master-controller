@@ -29,7 +29,7 @@ const uint16_t MF_INTERDIGIT_TIMEOUT = 50*5; /* 5 Seconds */
 enum {MFE_OK=0, MFE_TIMEOUT};
 enum {MFR_IDLE=0, MFR_WAIT_KP, MFR_KP_SILENCE, MFR_WAIT_DIGIT, MFR_WAIT_DIGIT_SILENCE, MFR_TIMEOUT, MFR_DONE, MFR_WAIT_RELEASE};
 
-typedef void (*Mf_Callback)(uint32_t descriptor, uint8_t error_code, uint8_t digit_count, char *data);
+typedef void (*Mf_Callback)(void *parameter, uint8_t error_code, uint8_t digit_count, char *data);
 
 /* Data passed in message queue from interrupt */
 typedef struct queueData {
@@ -58,6 +58,7 @@ typedef struct mfData {
 	uint8_t error_code;
 	uint8_t tone_block_count;
 	uint8_t digit_count;
+	void *parameter;
 	Mf_Callback callback;
 	char digits[MF_MAX_DIGITS];
 	uint16_t mf_dma_buffer[MF_ADC_BUF_LEN];
@@ -79,7 +80,7 @@ class MF_Decoder {
 public:
 void setup(); /* Called once before RTOS is running */
 void init(); /* Called once after RTOS is running */
-int32_t seize(Mf_Callback callback, int channel = -1, bool re_arm=false); /* Called to seize the MF receiver */
+int32_t seize(Mf_Callback callback, void *parameter, int channel = -1, bool re_arm=false); /* Called to seize the MF receiver */
 void release(int32_t descriptor); /* Called to release the MF receiver */
 void handle_buffer(ADC_HandleTypeDef *hadc, uint8_t buffer_no); /* Called by the DMA engine when half full and full.*/
 void receiver_worker(void *args)  __attribute__((section(".xccmram")));

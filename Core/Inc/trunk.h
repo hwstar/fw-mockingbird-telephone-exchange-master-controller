@@ -20,7 +20,7 @@ REG_DROP_CALL=5, REG_OUTGOING_ADDR_COMPLETE=6, REG_RESET=7};
 enum {EV_NONE=0, EV_REQUEST_IR=1, EV_CALL_DROPPED=2, EV_NO_WINK=3, EV_SEND_ADDR_INFO=4, EV_FAREND_SUPV=5, EV_FAREND_DISC=6, EV_BUSY = 7};
 
 /* Trunk states */
-enum {TS_IDLE=0, TS_SEIZE_JUNCTOR, TS_SEIZE_MFR, TS_WAIT_ADDR_INFO, TS_RESET};
+enum {TS_IDLE=0, TS_SEIZE_JUNCTOR, TS_SEIZE_MFR, TS_WAIT_ADDR_INFO, TS_HAVE_ADDR_INFO, TS_RESET};
 
 
 
@@ -35,7 +35,7 @@ protected:
 
 
 public:
-	void _mf_receiver_callback(uint32_t descriptor, uint8_t error_code, uint8_t digit_count, char *data);
+	void _mf_receiver_callback(void *parameter, uint8_t error_code, uint8_t digit_count, char *data);
 	void event_handler(uint32_t event_type, uint32_t resource);
 	void init(void);
 	void poll(void);
