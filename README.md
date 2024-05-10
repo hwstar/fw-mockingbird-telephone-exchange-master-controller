@@ -1,7 +1,7 @@
 
 Mocking Bird Telephone Exchange Master Controller
 
-![alt text](https://github.com/hwstar/mockingbird-telephone-exchange-master-controller/assets/mess-o-wires-jpg "Prototype hardware")
+![alt text](https://github.com/hwstar/fw-mockingbird-telephone-exchange-master-controller/assets/mess-o-wires-jpg "Prototype hardware")
 
 Features:
 
