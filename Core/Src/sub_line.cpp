@@ -249,6 +249,9 @@ void Sub_Line::init(void) {
 	/* Initialization of line-specific information */
 	for(uint8_t index = 0; index < MAX_DUAL_LINE_CARDS * 2; index++) {
 		Connector::Conn_Info *linfo = &this->_conn_info[index];
+		/* Route table number */
+		/* Todo make this configurable */
+		linfo->route_table_number = 0;
 
 		/* Digit dialing timer */
 		linfo->dial_timer = osTimerNew(__dial_timer_callback, osTimerOnce, linfo, NULL);
@@ -374,10 +377,10 @@ void Sub_Line::poll(void) {
 			case Connector::ROUTE_DEST_CONNECTED:
 				{
 					uint32_t equip_type = Conn.get_called_equip_type(linfo);
-					/* Todo: Make this a function in connector.cpp */
+					/* Todo: move to connector */
 					if(equip_type == Connector::ET_LINE) {
 						/* Send ringing */
-						Tone_plant.send_buffer_loop_ulaw(linfo->tone_plant_descriptor, "city_ring", 0.0);
+						Conn.send_ringing(linfo);
 					} else if(equip_type == Connector::ET_TRUNK) {
 						/* A trunk destination means we don't need the tone generator any more.
 						 * Release it so it can be be available for MF tone generation */
@@ -415,7 +418,7 @@ void Sub_Line::poll(void) {
 
 	case LS_SEND_BUSY: /* Caller perspective */
 		/* Tell tone plant to send call busy tone */
-		Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_BUSY);
+		Conn.send_busy(linfo);
 		linfo->state = LS_WAIT_HANGUP;
 		break;
 
@@ -423,18 +426,15 @@ void Sub_Line::poll(void) {
 	case LS_SEND_CONGESTION: /* Caller perspective */
 		/* Tell tone plant to send congestion tone */
 		osTimerStart(linfo->dial_timer, DTMF_DIGIT_DIAL_TIME);
-		Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_CONGESTION);
+		Conn.send_congestion(linfo);
 		linfo->state = LS_WAIT_HANGUP;
 		break;
 
 	case LS_CONGESTION_DISCONNECT:
 		/* Stop tone generation */
 		Tone_plant.stop(linfo->tone_plant_descriptor);
-		/* Release tone generator */
-		if(linfo->tone_plant_descriptor != -1) {
-			Tone_plant.channel_release(linfo->tone_plant_descriptor);
-			linfo->tone_plant_descriptor = -1;
-		}
+		/* Release the tone generator */
+		Conn.release_tone_generator(linfo);
 		/* Release the junctor */
 		if(linfo->junctor_seized) {
 			Xps_logical.release(&linfo->jinfo);
@@ -565,7 +565,7 @@ void Sub_Line::poll(void) {
 		/* Connect tone plant to junctor */
 		Xps_logical.connect_tone_plant_output(&linfo->jinfo, linfo->tone_plant_descriptor);
 		/* Send Congestion */
-		Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_CONGESTION);
+		Conn.send_congestion(linfo);
 		/* Start the dial timer for congestion time out*/
 		osTimerStart(linfo->dial_timer, DTMF_DIGIT_DIAL_TIME);
 		linfo->state = LS_ORIG_DISCONNECT_D;
@@ -605,18 +605,9 @@ void Sub_Line::poll(void) {
 		/* Stop dial timer if it was running */
 		osTimerStop(linfo->dial_timer);
 		/* Release any resources first */
-		if(linfo->tone_plant_descriptor != -1) {
-			Tone_plant.channel_release(linfo->tone_plant_descriptor);
-			linfo->tone_plant_descriptor = -1;
-		}
-		if(linfo->mf_receiver_descriptor != -1) {
-				MF_decoder.release(linfo->mf_receiver_descriptor);
-				linfo->mf_receiver_descriptor = -1;
-			}
-		if(linfo->dtmf_receiver_descriptor != -1) {
-				Dtmf_receivers.release(linfo->dtmf_receiver_descriptor);
-				linfo->dtmf_receiver_descriptor = -1;
-			}
+		Conn.release_tone_generator(linfo);
+		Conn.release_mf_receiver(linfo);
+		Conn.release_dtmf_receiver(linfo);
 
 		/* Then release the junctor if we seized it initially */
 		if(linfo->junctor_seized) {
@@ -625,6 +616,7 @@ void Sub_Line::poll(void) {
 		}
 		linfo->peer = NULL;
 		linfo->state = LS_IDLE;
+		linfo->called_party_hangup = false;
 		break;
 
 	default:

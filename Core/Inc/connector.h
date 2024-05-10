@@ -57,8 +57,10 @@ typedef struct Route_Info {
 
 
 typedef struct Conn_Info {
+	uint8_t route_table_number;
 	uint8_t phys_line_trunk_number;
 	uint8_t state;
+	bool called_party_hangup;
 	bool junctor_seized;
 	int16_t tone_plant_descriptor;
 	int16_t mf_receiver_descriptor;
@@ -103,8 +105,10 @@ public:
 	void release_mf_receiver(Conn_Info *linfo);
 	void release_dtmf_receiver(Conn_Info *linfo);
 	void release_tone_generator(Conn_Info *linfo);
-
-
+	void send_ringing(Conn_Info *info);
+	void send_busy(Conn_Info *info);
+	void send_congestion(Conn_Info *info);
+	void release_called_party(Conn_Info *info);
 
 };
 

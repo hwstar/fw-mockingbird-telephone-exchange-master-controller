@@ -233,8 +233,7 @@ uint32_t Connector::test(Conn_Info *conn_info, const char *digits_received) {
 	Route_Table_Node *rtn;
 	ri->route_table_node = NULL;
 	/* Traverse through the routing table */
-	/* Todo: make it use an arbitrary table */
-	rtn = this->_route_table_heads[0];
+	rtn = this->_route_table_heads[conn_info->route_table_number];
 	if(rtn == NULL) {
 		return ROUTE_INVALID;
 	}
@@ -292,7 +291,6 @@ uint32_t Connector::resolve(Conn_Info *conn_info) {
 	memcpy(conn_info->route_info.dest_phys_lines_trunks,
 			conn_info->route_info.route_table_node->phys_lines_trunks,
 			MAX_PHYS_LINE_TRUNK_TABLE);
-
 	/* Send a seize message to the destination */
 	/* Todo Note: This doesn't handle groups of trunks yet. */
 	uint32_t pm_res = this->send_peer_message(
@@ -532,6 +530,7 @@ void Connector::release_tone_generator(Conn_Info *linfo) {
 		LOG_PANIC(TAG, "Null pointer passed in");
 	}
 	if(linfo->tone_plant_descriptor != -1) {
+		Tone_plant.stop(linfo->tone_plant_descriptor);
 		Xps_logical.disconnect_tone_plant_output(&linfo->jinfo);
 		Tone_plant.channel_release(linfo->tone_plant_descriptor);
 		linfo->tone_plant_descriptor = -1;
@@ -540,8 +539,56 @@ void Connector::release_tone_generator(Conn_Info *linfo) {
 	}
 }
 
+/*
+ * Send ringing call progress tones
+ */
 
 
+void Connector::send_ringing(Conn_Info *info) {
+	Tone_plant.send_buffer_loop_ulaw(info->tone_plant_descriptor, "city_ring", 0.0);
+}
+
+/*
+ * Send busy progress tones
+ */
+
+
+void Connector::send_busy(Conn_Info *info) {
+	Tone_plant.send_call_progress_tones(info->tone_plant_descriptor, Tone_Plant::CPT_BUSY);
+}
+
+
+/*
+ * Send congestion tones
+ */
+
+
+void Connector::send_congestion(Conn_Info *info) {
+	Tone_plant.send_call_progress_tones(info->tone_plant_descriptor, Tone_Plant::CPT_CONGESTION);
+}
+
+/*
+ * Release called party
+ */
+
+void Connector::release_called_party(Conn_Info *info) {
+
+	uint8_t equip_type = this->get_called_equip_type(info);
+	uint8_t dest_phys_line_trunk_number = this->get_called_phys_line_trunk(info);
+	uint8_t message;
+
+	switch(equip_type) {
+		case ET_TRUNK:
+		case ET_LINE:
+			message = PM_RELEASE;
+			break;
+
+		default:
+			LOG_PANIC(TAG, "Unknown equipment type: %u", equip_type);
+			break;
+		}
+		Conn.send_peer_message(info, equip_type, dest_phys_line_trunk_number, message);
+}
 
 
 
