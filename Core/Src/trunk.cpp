@@ -139,7 +139,7 @@ uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t p
 
 	case Connector::PM_CALLED_PARTY_HUNGUP:
 		if(tinfo->state == TS_INCOMING_ANSWERED) {
-			LOG_DEBUG(TAG, "Called party hung up");
+			/* LOG_DEBUG(TAG, "Called party hung up"); */
 			tinfo->called_party_hangup = true;
 			tinfo->state = TS_INCOMING_TEARDOWN;
 		}
@@ -320,11 +320,11 @@ void Trunk::poll(void) {
 
 	case TS_INCOMING_TEARDOWN:
 		if(tinfo->called_party_hangup) {
-			LOG_DEBUG(TAG, "Sending drop call to trunk card");
+			/* LOG_DEBUG(TAG, "Sending drop call to trunk card"); */
 			Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_DROP_CALL);
 		}
 		else {
-			LOG_DEBUG(TAG, "Releasing called party");
+			/* LOG_DEBUG(TAG, "Releasing called party"); */
 			Conn.release_called_party(tinfo);
 		}
 		tinfo->state = TS_RESET;
