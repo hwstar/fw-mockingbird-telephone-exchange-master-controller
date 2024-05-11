@@ -591,7 +591,6 @@ void Connector::release_called_party(Conn_Info *info) {
 }
 
 
-
 } /* End namespace connector */
 
 Connector::Connector Conn;

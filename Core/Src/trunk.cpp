@@ -85,39 +85,48 @@ void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
 	Connector::Conn_Info *tinfo = &this->_conn_info[resource];
 
 	/* Incoming call from trunk */
-	if((tinfo->state == TS_IDLE) && (event_type == EV_REQUEST_IR)) {
-		tinfo->state = TS_SEIZE_JUNCTOR;
-	}
-	else if(event_type == EV_CALL_DROPPED) {
-		/* Call dropped by originator, check to see if we need to take action */
-		if((tinfo->state == TS_SEIZE_JUNCTOR) ||
-				(tinfo->state == TS_SEIZE_TG) ||
-				(tinfo->state == TS_SEIZE_MFR) ||
-				(tinfo->state == TS_WAIT_ADDR_INFO) ||
-				(tinfo->state == TS_HAVE_ADDR_INFO) ||
-				(tinfo->state == TS_SEND_RINGING) ||
-				(tinfo->state == TS_SEND_BUSY) ||
-				(tinfo->state == TS_SEND_CONGESTION) ||
-				(tinfo->state == TS_INCOMING_FAILED)||
-				(tinfo->state == TS_INCOMING_WAIT_SUPV) ||
-				(tinfo->state == TS_INCOMING_CONNECT_AUDIO)){
+
+	switch(event_type) {
+	case EV_REQUEST_IR:
+		if(tinfo->state == TS_IDLE) {
+			tinfo->state = TS_SEIZE_JUNCTOR;
+		}
+		break;
+	case EV_CALL_DROPPED:
+		switch(tinfo->state) {
+		case TS_SEIZE_JUNCTOR:
+		case TS_SEIZE_TG:
+		case TS_SEIZE_MFR:
+		case TS_WAIT_ADDR_INFO:
+		case TS_HAVE_ADDR_INFO:
+		case TS_SEND_BUSY:
+		case TS_SEND_CONGESTION:
+		case TS_INCOMING_FAILED:
+		case TS_INCOMING_CONNECT_AUDIO:
 			tinfo->state = TS_RESET;
+			break;
+
+		case TS_INCOMING_WAIT_SUPV:
+		case TS_SEND_RINGING:
+			tinfo->state = TS_RINGING_TEARDOWN;
+			break;
+
+		default:
+			break;
 		}
-		else if (tinfo->state == TS_INCOMING_ANSWERED){
-			tinfo->state = TS_INCOMING_TEARDOWN;
-			tinfo->called_party_hangup = false;
-		}
+		break;
+
+	case TS_INCOMING_ANSWERED:
+		tinfo->state = TS_INCOMING_TEARDOWN;
+		tinfo->called_party_hangup = false;
+		break;
 	}
-
-
 	osMutexRelease(this->_lock); /* Release the lock */
-
-
 }
 
 /* This handler receives messages from the connection peer */
 
-uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t phys_line_trunk_number, uint32_t message) {
+uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t phys_line_trunk_number, uint32_t message, void *data) {
 
 	if(!conn_info) {
 		LOG_PANIC(TAG, "Null pointer passed in");
@@ -129,8 +138,27 @@ uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t p
 	/* Point to the connection info for the physical line number */
 	Connector::Conn_Info *tinfo = &this->_conn_info[phys_line_trunk_number];
 
+	uint32_t res = Connector::PMR_OK;
+
 	switch(message) {
+	case Connector::PM_SEIZE:
+		/* Seize trunk for outgoing call */
+		if(tinfo->state == TS_IDLE) {
+			tinfo->peer = conn_info;
+			tinfo->state = TS_OUTGOING_START;
+		}
+		else {
+			tinfo->state = TS_SEND_TRUNK_BUSY;
+		}
+		break;
+
+	case Connector::PM_RELEASE:
+		/* Release trunk used for outgoing call */
+		break;
+
+
 	case Connector::PM_ANSWERED:
+		/* Called party answered */
 		if(tinfo->state == TS_INCOMING_WAIT_SUPV) {
 			tinfo->peer = conn_info;
 			tinfo->state = TS_INCOMING_CONNECT_AUDIO;
@@ -138,6 +166,7 @@ uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t p
 		break;
 
 	case Connector::PM_CALLED_PARTY_HUNGUP:
+		/* Called party hung up */
 		if(tinfo->state == TS_INCOMING_ANSWERED) {
 			/* LOG_DEBUG(TAG, "Called party hung up"); */
 			tinfo->called_party_hangup = true;
@@ -151,7 +180,7 @@ uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t p
 
 	}
 
-	return Connector::PMR_OK;
+	return res;
 }
 
 
@@ -204,7 +233,7 @@ void Trunk::poll(void) {
 
 	switch(tinfo->state) {
 	case TS_IDLE:
-		/* Wait for Request IR event */
+		/* Wait for Request IR  or seize event */
 		break;
 
 	case TS_SEIZE_JUNCTOR:
@@ -287,6 +316,15 @@ void Trunk::poll(void) {
 		tinfo->state = TS_INCOMING_WAIT_SUPV;
 		break;
 
+	case TS_RINGING_TEARDOWN: {
+		uint32_t dest_equip_type = Conn.get_called_equip_type(tinfo);
+		uint32_t dest_line_trunk_number = Conn.get_called_phys_line_trunk(tinfo);
+		Conn.send_peer_message(tinfo, dest_equip_type, dest_line_trunk_number, Connector::PM_RELEASE);
+		tinfo->state = TS_RESET;
+	}
+		break;
+
+
 	case TS_SEND_BUSY:
 		Conn.send_busy(tinfo);
 		tinfo->state = TS_INCOMING_FAILED;
@@ -331,6 +369,24 @@ void Trunk::poll(void) {
 		break;
 
 
+	case TS_OUTGOING_START:
+		/* Disconnect the caller's audio */
+		Conn.disconnect_caller_party_audio(tinfo->peer);
+		/* Seize the trunk */
+		Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_SEIZE_TRUNK);
+		tinfo->state = TS_WAIT_WINK_OR_BUSY;
+		break;
+
+	case TS_WAIT_WINK_OR_BUSY:
+		break;
+
+
+	case TS_SEND_TRUNK_BUSY: {
+		uint32_t dest_equip_type = Conn.get_caller_equip_type(tinfo);
+		uint32_t dest_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo);
+		Conn.send_peer_message(tinfo, dest_equip_type, dest_line_trunk_number, Connector::PM_TRUNK_BUSY);
+		tinfo->state = TS_RESET;
+		}
 
 	case TS_RESET:
 		/* Release any resources first */
