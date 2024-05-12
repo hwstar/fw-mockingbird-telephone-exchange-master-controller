@@ -106,6 +106,11 @@ void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
 			tinfo->state = TS_RESET;
 			break;
 
+		case TS_INCOMING_ANSWERED:
+			tinfo->state = TS_INCOMING_TEARDOWN;
+			tinfo->called_party_hangup = false;
+			break;
+
 		case TS_INCOMING_WAIT_SUPV:
 		case TS_SEND_RINGING:
 			tinfo->state = TS_RINGING_TEARDOWN;
@@ -116,10 +121,25 @@ void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
 		}
 		break;
 
-	case TS_INCOMING_ANSWERED:
-		tinfo->state = TS_INCOMING_TEARDOWN;
-		tinfo->called_party_hangup = false;
+
+	case EV_BUSY:
+		if(tinfo->state == TS_WAIT_WINK_OR_BUSY) {
+			tinfo->state = TS_SEND_TRUNK_BUSY;
+		}
 		break;
+
+	case EV_NO_WINK:
+		if(tinfo->state == TS_WAIT_WINK_OR_BUSY) {
+			tinfo->state = TS_GOT_NO_WINK;
+		}
+		break;
+
+	case EV_SEND_ADDR_INFO:
+		if(tinfo->state == TS_WAIT_WINK_OR_BUSY) {
+			tinfo->state = TS_OUTGOING_REQUEST_ADDR_INFO;
+		}
+
+
 	}
 	osMutexRelease(this->_lock); /* Release the lock */
 }
@@ -378,13 +398,35 @@ void Trunk::poll(void) {
 		break;
 
 	case TS_WAIT_WINK_OR_BUSY:
+		/* 3 possible outcomes:
+		 * 1. receive wink event
+		 * 2. receive busy event.
+		 * 3. receive wink time out event.
+		 */
 		break;
+
+	case TS_REQUEST_ADDR_INFO:
+		/* Got the wink event */
+		/* Send message to caller to request address information */
+		break;
+
+	case TS_OUTGOING_WAIT_ADDR_INFO:
+		/* Wait for caller state machine to send address information */
+		break;
+
+	case TS_GOT_NO_WINK:
+		/* Timed out waiting for wink */
+
+	case TS_RELEASE_TRUNK:
+		/* Release the trunk by sending REG_DROP_CALL to the trunk card, then clean up */
+		Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_DROP_CALL);
+		tinfo->state = TS_RESET;
 
 
 	case TS_SEND_TRUNK_BUSY: {
-		uint32_t dest_equip_type = Conn.get_caller_equip_type(tinfo);
-		uint32_t dest_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo);
-		Conn.send_peer_message(tinfo, dest_equip_type, dest_line_trunk_number, Connector::PM_TRUNK_BUSY);
+		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo);
+		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo);
+		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_TRUNK_BUSY);
 		tinfo->state = TS_RESET;
 		}
 
