@@ -61,6 +61,7 @@ typedef struct Route_Info {
 
 
 typedef struct Conn_Info {
+	bool release_request;
 	uint8_t route_table_number;
 	uint8_t phys_line_trunk_number;
 	uint8_t equip_type;
