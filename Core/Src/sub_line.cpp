@@ -183,6 +183,7 @@ uint32_t Sub_Line::peer_message_handler(Connector::Conn_Info *conn_info, uint32_
 	/* Point to the connection info for the physical line number */
 	Connector::Conn_Info *linfo = &this->_conn_info[phys_line_trunk_number];
 
+	LOG_DEBUG(TAG,"Line %u got peer message %u", phys_line_trunk_number, message);
 
 	switch(message) {
 	case Connector::PM_SEIZE:
@@ -217,6 +218,7 @@ uint32_t Sub_Line::peer_message_handler(Connector::Conn_Info *conn_info, uint32_
 
 	case Connector::PM_ANSWERED:
 		if((linfo->state == LS_WAIT_ANSWER) || (linfo->state == LS_TRUNK_WAIT_SUPV )) {
+			LOG_DEBUG(TAG, "New state: LS_CALLED_PARTY_ANSWERED");
 			linfo->state = LS_CALLED_PARTY_ANSWERED;
 		}
 		else {
@@ -543,18 +545,20 @@ void Sub_Line::poll(void) {
 		/* Wait here for peer message */
 		break;
 
-	case LS_CALLED_PARTY_ANSWERED: /* Caller perspective */
+	case LS_CALLED_PARTY_ANSWERED: { /* Caller perspective */
 
-		/* Stop tone generator and release it */
-		Tone_plant.stop(linfo->tone_plant_descriptor);
-		Conn.release_tone_generator(linfo);
-
-		/* Send in call state to line card */
-		Card_comm.send_command(Card_Comm::RT_LINE, this->_line_to_service, REG_SET_IN_CALL);
-		/* Connect audio path */
-		Conn.connect_called_party_audio(linfo);
+		uint8_t et = Conn.get_called_equip_type(linfo);
+		/* If called party is a line on this exchange */
+		if(et == Connector::ET_LINE) {
+			Conn.release_tone_generator(linfo);
+			/* Send in call state to line card */
+			Card_comm.send_command(Card_Comm::RT_LINE, this->_line_to_service, REG_SET_IN_CALL);
+			/* Connect audio path */
+			Conn.connect_called_party_audio(linfo);
+		}
 
 		linfo->state = LS_WAIT_END_CALL;
+	}
 
 		break;
 
@@ -615,6 +619,7 @@ void Sub_Line::poll(void) {
 			uint32_t caller_equip_type = Conn.get_caller_equip_type(linfo->peer);
 			uint32_t caller_phys_number = Conn.get_caller_phys_line_trunk(linfo->peer);
 			Conn.send_peer_message(linfo, caller_equip_type, caller_phys_number , Connector::PM_ANSWERED);
+			LOG_DEBUG(TAG, "Setting call state to LS_ANSWERED");
 			linfo->state = LS_ANSWERED;
 		}
 		break;

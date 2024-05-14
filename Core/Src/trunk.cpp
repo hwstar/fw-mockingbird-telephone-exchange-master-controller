@@ -515,6 +515,9 @@ void Trunk::poll(void) {
 		LOG_DEBUG(TAG, "MF Address sent");
 		Conn.release_tone_generator(tinfo->peer);
 
+		/* Send outgoing address complete message to trunk card */
+		Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_OUTGOING_ADDR_COMPLETE);
+
 		/* Send message to peer that the caller can now be connected. */
 		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
 		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
@@ -539,6 +542,7 @@ void Trunk::poll(void) {
 
 	case TS_OUTGOING_IN_CALL:
 		/* In an outgoing call over a trunk */
+		break;
 
 	case TS_OUTGOING_SEND_FAREND_DISC: {
 		/* Received disconnect from the far end of a trunk */
@@ -606,13 +610,13 @@ void Trunk::poll(void) {
 		break;
 	}
 
-	/*
+
 	this->_trunk_to_service++;
 	if(this->_trunk_to_service >= MAX_TRUNK_CARDS) {
 		this->_trunk_to_service = 0;
 	}
-	*/
-	this->_trunk_to_service = 2; /* DEBUG */
+
+
 
 	osMutexRelease(this->_lock); /* Release the lock */
 
