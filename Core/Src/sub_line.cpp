@@ -1,5 +1,6 @@
 #include "top.h"
 #include "logging.h"
+#include "util.h"
 #include "card_comm.h"
 #include "xps_logical.h"
 #include "tone_plant.h"
@@ -120,6 +121,16 @@ void Sub_Line::event_handler(uint32_t event_type, uint32_t resource) {
 			linfo->state = LS_RESET;
 			break;
 
+		case LS_SEIZE_TRUNK:
+		case LS_WAIT_TRUNK_RESPONSE:
+		case LS_TRUNK_SEND_ADDR_INFO:
+		case LS_TRUNK_WAIT_ADDR_SENT:
+		case LS_TRUNK_CONNECT_CALLER:
+		case LS_TRUNK_WAIT_SUPV:
+			linfo->state = LS_TRUNK_OUTGOING_RELEASE;
+			break;
+
+
 		/* Calling party hung up*/
 		case LS_ORIG_DISCONNECT:
 		case LS_ORIG_DISCONNECT_B:
@@ -151,7 +162,6 @@ void Sub_Line::event_handler(uint32_t event_type, uint32_t resource) {
 			linfo->state = LS_ANSWER;
 		}
 	}
-
 	osMutexRelease(this->_lock); /* Release the lock */
 
 
@@ -206,13 +216,12 @@ uint32_t Sub_Line::peer_message_handler(Connector::Conn_Info *conn_info, uint32_
 
 
 	case Connector::PM_ANSWERED:
-		if(linfo->state == LS_WAIT_ANSWER) {
+		if((linfo->state == LS_WAIT_ANSWER) || (linfo->state == LS_TRUNK_WAIT_SUPV )) {
 			linfo->state = LS_CALLED_PARTY_ANSWERED;
 		}
 		else {
 			LOG_ERROR(TAG, "Bad Message");
 		}
-
 		break;
 
 	case Connector::PM_CALLED_PARTY_HUNGUP:
@@ -221,6 +230,34 @@ uint32_t Sub_Line::peer_message_handler(Connector::Conn_Info *conn_info, uint32_
 		}
 		else {
 			LOG_ERROR(TAG, "Bad Message");
+		}
+		break;
+
+	case Connector::PM_TRUNK_BUSY:
+		if((linfo->state == LS_WAIT_TRUNK_RESPONSE)) {
+			LOG_INFO(TAG, "Trunk busy");
+
+
+
+		}
+		break;
+
+	case Connector::PM_TRUNK_NO_WINK:
+		if((linfo->state == LS_WAIT_TRUNK_RESPONSE)) {
+				LOG_WARN(TAG, "No wink seen on trunk: %u", phys_line_trunk_number);
+				linfo->state = LS_SEND_CONGESTION;
+			}
+		break;
+
+	case Connector::PM_TRUNK_READY_FOR_ADDR_INFO:
+		if(linfo->state == LS_WAIT_TRUNK_RESPONSE) {
+			linfo->state = LS_TRUNK_SEND_ADDR_INFO;
+		}
+		break;
+
+	case Connector::PM_TRUNK_READY_TO_CONNECT_CALLER:
+		if(linfo->state == LS_TRUNK_WAIT_ADDR_SENT) {
+			linfo->state = LS_TRUNK_CONNECT_CALLER;
 		}
 		break;
 
@@ -260,6 +297,7 @@ void Sub_Line::init(void) {
 		}
 
 		/* Variables */
+		linfo->equip_type = Connector::ET_LINE;
 		linfo->phys_line_trunk_number = index;
 		linfo->state = LS_IDLE;
 		linfo->tone_plant_descriptor = linfo->mf_receiver_descriptor = linfo->dtmf_receiver_descriptor = -1;
@@ -381,14 +419,13 @@ void Sub_Line::poll(void) {
 					if(equip_type == Connector::ET_LINE) {
 						/* Send ringing */
 						Conn.send_ringing(linfo);
+						linfo->state = LS_WAIT_ANSWER;
 					} else if(equip_type == Connector::ET_TRUNK) {
-						/* A trunk destination means we don't need the tone generator any more.
-						 * Release it so it can be be available for MF tone generation */
-						Conn.release_tone_generator(linfo);
+						linfo->state = LS_WAIT_TRUNK_RESPONSE;
 					}
 				}
 
-				linfo->state = LS_WAIT_ANSWER;
+
 				break;
 
 			case Connector::ROUTE_DEST_BUSY:
@@ -405,6 +442,64 @@ void Sub_Line::poll(void) {
 			}
 		}
 		break;
+
+
+
+
+	case LS_WAIT_TRUNK_RESPONSE: /* Caller perspective */
+		/* Wait for the trunk to respond with a peer message */
+		break;
+
+	case LS_TRUNK_SEND_ADDR_INFO: { /* Caller perspective */
+		/* Release the tone generator as we don't need it now */
+		Conn.release_tone_generator(linfo);
+		/* Temporarily disconnect the caller from the junctor */
+		Conn.disconnect_caller_party_audio(linfo);
+		/* Everything should be off of the junctor now */
+		/* Prepare the address info */
+		uint8_t start = linfo->route_info.route_table_node->trunk_addressing_start;
+		uint8_t end = linfo->route_info.route_table_node->trunk_addressing_end;
+
+		/* Make the trunk dial string */
+		Utility.make_trunk_dial_string(linfo->trunk_outgoing_address, linfo->route_info.dialed_number, start, end,
+				Connector::MAX_TRUNK_OUTGOING_ADDRESS);
+		LOG_DEBUG(TAG, "Trunk dialed digits: %s", linfo->trunk_outgoing_address);
+
+		/* Tell the trunk the address has been formatted and is ready to send */
+		uint32_t dest_equip_type = Conn.get_called_equip_type(linfo);
+		uint32_t dest_phys_line_trunk_number = Conn.get_called_phys_line_trunk(linfo);
+		Conn.send_peer_message(linfo, dest_equip_type, dest_phys_line_trunk_number, Connector::PM_TRUNK_ADDR_INFO_READY);
+
+		/* Wait for address info to be sent */
+		linfo->state = LS_TRUNK_WAIT_ADDR_SENT;
+	}
+		break;
+
+	case LS_TRUNK_WAIT_ADDR_SENT: /* Caller perspective */
+		/* Wait for MF Digits to be sent */
+		break;
+
+	case LS_TRUNK_CONNECT_CALLER: /* Caller perspective */
+		/* Connect caller audio path */
+		Conn.connect_caller_party_audio(linfo);
+		linfo->state = LS_TRUNK_WAIT_SUPV;
+		break;
+
+	case LS_TRUNK_WAIT_SUPV: /* Caller perspective */
+		/* Wait here for trunk supervision */
+		break;
+
+
+	case LS_TRUNK_OUTGOING_RELEASE: { /* Caller perspective */
+		/* Send peer message to release trunk due to a subscriber hanging up */
+		uint32_t dest_equip_type = Conn.get_called_equip_type(linfo);
+		uint32_t dest_phys_line_trunk_number = Conn.get_called_phys_line_trunk(linfo);
+		Conn.send_peer_message(linfo, dest_equip_type, dest_phys_line_trunk_number, Connector::PM_RELEASE);
+		linfo->state = LS_RESET;
+
+	}
+		break;
+
 
 	case LS_DIAL_TIMEOUT:
 		/* Release DTMF Receiver */

@@ -6,17 +6,21 @@
 namespace Connector {
 const uint8_t MAX_DIALED_DIGITS = 15;
 const uint8_t MAX_PHYS_LINE_TRUNK_TABLE = 3;
+const uint8_t MAX_TRUNK_OUTGOING_ADDRESS = 17;
 const uint32_t MAX_ROUTE_NODES = 128;
 const uint32_t MAX_ROUTE_TABLES = 8;
+
 
 /* Route and connection return values */
 enum {ROUTE_INDETERMINATE = 0, ROUTE_VALID, ROUTE_INVALID, ROUTE_DEST_CONNECTED, ROUTE_DEST_BUSY, ROUTE_DEST_CONGESTED};
 /* Equipment types */
 enum {ET_UNDEF=0, ET_LINE, ET_TRUNK};
 /* Peer messages */
-enum {PM_NOP=0,PM_SEIZE, PM_RELEASE, PM_ANSWERED, PM_CALLED_PARTY_HUNGUP, PM_TRUNK_BUSY};
+enum {PM_NOP=0,PM_SEIZE=1, PM_RELEASE=2, PM_ANSWERED=3, PM_CALLED_PARTY_HUNGUP=4, PM_TRUNK_BUSY=5,
+	PM_TRUNK_NO_WINK=6, PM_TRUNK_READY_FOR_ADDR_INFO=7, PM_TRUNK_ADDR_INFO_READY=8,
+	PM_TRUNK_ADDR_INFO_SENT=9, PM_TRUNK_READY_TO_CONNECT_CALLER=10};
 /* Peer message return values */
-enum {PMR_NOP=0, PMR_OK, PMR_BUSY};
+enum {PMR_NOP=0, PMR_OK=1, PMR_BUSY=2, PMR_TRUNK_BUSY=3};
 
 typedef void (*Conn_Handler_Type)(uint32_t event, uint32_t equip_type, uint32_t phys_line_trunk_num);
 
@@ -59,6 +63,7 @@ typedef struct Route_Info {
 typedef struct Conn_Info {
 	uint8_t route_table_number;
 	uint8_t phys_line_trunk_number;
+	uint8_t equip_type;
 	uint8_t state;
 	bool called_party_hangup;
 	bool junctor_seized;
@@ -69,6 +74,7 @@ typedef struct Conn_Info {
 	uint8_t num_dialed_digits;
 	uint8_t prev_num_dialed_digits;
 	char digit_buffer[MAX_DIALED_DIGITS + 1];
+	char trunk_outgoing_address[MAX_TRUNK_OUTGOING_ADDRESS + 1];
 	Route_Info route_info;
 	struct Conn_Info *peer;
 	osTimerId_t dial_timer;

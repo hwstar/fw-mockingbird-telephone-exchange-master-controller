@@ -14,7 +14,6 @@ static const char *TAG = "trunk";
 
 namespace Trunk {
 
-
 /*
  * Called when there is an MF address to process
  */
@@ -66,6 +65,34 @@ void Trunk::_mf_receiver_callback(void *parameter, uint8_t error_code, uint8_t d
 
 
 }
+
+/*
+ * The MF sender has completed sending the address digits.
+ * Set the next trunk state.
+ */
+
+
+static void __mf_sending_complete(uint32_t descriptor, void *data) {
+	Trunks._mf_sending_complete(descriptor, data);
+}
+
+void Trunk::_mf_sending_complete(uint32_t descriptor, void *data) {
+	Connector::Conn_Info *tinfo = (Connector::Conn_Info *) data;
+	if(!tinfo) {
+		LOG_PANIC(TAG, "NULL pointer passed in");
+	}
+	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
+
+	if(tinfo->state == TS_OUTGOING_SEND_ADDR_INFO_B) {
+		tinfo->state = TS_OUTGOING_SEND_ADDR_INFO_C;
+	}
+
+	osMutexRelease(this->_lock); /* Release the lock */
+
+
+}
+
+
 
 /*
  * This gets called when an event from a trunk card is received
@@ -138,6 +165,19 @@ void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
 		if(tinfo->state == TS_WAIT_WINK_OR_BUSY) {
 			tinfo->state = TS_OUTGOING_REQUEST_ADDR_INFO;
 		}
+		break;
+
+	case EV_FAREND_SUPV:
+		if(tinfo->state == TS_OUTGOING_WAIT_SUPV) {
+			tinfo->state = TS_OUTGOING_ANSWERED;
+		}
+		break;
+
+	case EV_FAREND_DISC:
+		if(tinfo->state == TS_OUTGOING_IN_CALL) {
+			tinfo->state = TS_OUTGOING_SEND_FAREND_DISC;
+		}
+		break;
 
 
 	}
@@ -162,18 +202,41 @@ uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t p
 
 	switch(message) {
 	case Connector::PM_SEIZE:
+		LOG_DEBUG(TAG,"Seize from equip_type %u, phys_line/trunk %u", conn_info->equip_type, conn_info->phys_line_trunk_number);
 		/* Seize trunk for outgoing call */
 		if(tinfo->state == TS_IDLE) {
+			/* Save caller connection info for permanent use */
 			tinfo->peer = conn_info;
+			LOG_DEBUG(TAG, "Seizing trunk %u", phys_line_trunk_number);
 			tinfo->state = TS_OUTGOING_START;
 		}
 		else {
-			tinfo->state = TS_SEND_TRUNK_BUSY;
+			LOG_DEBUG(TAG, "Sending trunk busy PM at seizure");
+			res = Connector::PMR_TRUNK_BUSY;
 		}
 		break;
 
 	case Connector::PM_RELEASE:
 		/* Release trunk used for outgoing call */
+		/* LOG_DEBUG(TAG, "Got release from peer, current state is %u", tinfo->state); */
+		switch(tinfo->state) {
+		/* Trunk call in process states */
+		case TS_OUTGOING_START:
+		case TS_WAIT_WINK_OR_BUSY:
+		case TS_OUTGOING_REQUEST_ADDR_INFO:
+		case TS_OUTGOING_WAIT_ADDR_INFO:
+		case TS_OUTGOING_SEND_ADDR_INFO:
+		case TS_OUTGOING_SEND_ADDR_INFO_B:
+		case TS_OUTGOING_SEND_ADDR_INFO_C:
+		case TS_OUTGOING_WAIT_SUPV:
+		case TS_OUTGOING_ANSWERED:
+			tinfo->state = TS_RELEASE_TRUNK;
+			break;
+
+		default:
+			break;
+
+		}
 		break;
 
 
@@ -191,6 +254,13 @@ uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t p
 			/* LOG_DEBUG(TAG, "Called party hung up"); */
 			tinfo->called_party_hangup = true;
 			tinfo->state = TS_INCOMING_TEARDOWN;
+		}
+		break;
+
+
+	case Connector::PM_TRUNK_ADDR_INFO_READY:
+		if(tinfo->state == TS_OUTGOING_WAIT_ADDR_INFO) {
+			tinfo->state = TS_OUTGOING_SEND_ADDR_INFO;
 		}
 		break;
 
@@ -231,6 +301,7 @@ void Trunk::init(void) {
 
 		tinfo->state = TS_IDLE;
 		tinfo->phys_line_trunk_number = index;
+		tinfo->equip_type = Connector::ET_TRUNK;
 		tinfo->tone_plant_descriptor = tinfo->mf_receiver_descriptor = tinfo->dtmf_receiver_descriptor = -1;
 
 
@@ -390,9 +461,8 @@ void Trunk::poll(void) {
 
 
 	case TS_OUTGOING_START:
-		/* Disconnect the caller's audio */
-		Conn.disconnect_caller_party_audio(tinfo->peer);
 		/* Seize the trunk */
+		LOG_DEBUG(TAG, "Send seize trunk command to card, wait for wink or busy");
 		Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_SEIZE_TRUNK);
 		tinfo->state = TS_WAIT_WINK_OR_BUSY;
 		break;
@@ -405,30 +475,113 @@ void Trunk::poll(void) {
 		 */
 		break;
 
-	case TS_REQUEST_ADDR_INFO:
+	case TS_OUTGOING_REQUEST_ADDR_INFO: {
 		/* Got the wink event */
 		/* Send message to caller to request address information */
+		LOG_DEBUG(TAG, "Sending Ready for Address Info");
+		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
+		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
+		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_TRUNK_READY_FOR_ADDR_INFO);
+		tinfo->state = TS_OUTGOING_WAIT_ADDR_INFO;
+	}
 		break;
 
 	case TS_OUTGOING_WAIT_ADDR_INFO:
 		/* Wait for caller state machine to send address information */
 		break;
 
-	case TS_GOT_NO_WINK:
-		/* Timed out waiting for wink */
 
-	case TS_RELEASE_TRUNK:
-		/* Release the trunk by sending REG_DROP_CALL to the trunk card, then clean up */
-		Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_DROP_CALL);
+	case TS_OUTGOING_SEND_ADDR_INFO:
+		/* Seize a tone plant channel */
+		/* Utilize the peer data structure for this */
+		if((tinfo->peer->tone_plant_descriptor = Tone_plant.channel_seize()) != -1) {
+			/* Connect the tone plant to the junctor */
+			Xps_logical.connect_tone_plant_output(&tinfo->peer->jinfo, tinfo->peer->tone_plant_descriptor, false);
+			/* Connect the outgoing trunk to the junctor */
+			Conn.connect_called_party_audio(tinfo->peer);
+			tinfo->state = TS_OUTGOING_SEND_ADDR_INFO_B;
+			/* Send Address info in MF */
+			Tone_plant.send_mf(tinfo->peer->tone_plant_descriptor, tinfo->peer->trunk_outgoing_address, __mf_sending_complete, tinfo);
+		}
+		break;
+
+	case TS_OUTGOING_SEND_ADDR_INFO_B:
+		/* Wait for MF digits to be sent */
+		break;
+
+	case TS_OUTGOING_SEND_ADDR_INFO_C: {
+		/* MF Digits have been sent */
+		/* Release the tone generator */
+		LOG_DEBUG(TAG, "MF Address sent");
+		Conn.release_tone_generator(tinfo->peer);
+
+		/* Send message to peer that the caller can now be connected. */
+		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
+		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
+		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_TRUNK_READY_TO_CONNECT_CALLER);
+		tinfo->state = TS_OUTGOING_WAIT_SUPV;
+	}
+		break;
+
+	case TS_OUTGOING_WAIT_SUPV:
+		/* Call connected, wait for called party to answer */
+		break;
+
+	case TS_OUTGOING_ANSWERED: {
+		/* The party on the far end of the trunk answered */
+		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
+		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
+		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_ANSWERED);
+		tinfo->state = TS_OUTGOING_IN_CALL;
+	}
+		break;
+
+
+	case TS_OUTGOING_IN_CALL:
+		/* In an outgoing call over a trunk */
+
+	case TS_OUTGOING_SEND_FAREND_DISC: {
+		/* Received disconnect from the far end of a trunk */
+		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
+		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
+		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_CALLED_PARTY_HUNGUP);
 		tinfo->state = TS_RESET;
+	}
+		break;
+
+
+
+	case TS_GOT_NO_WINK: {
+		/* Timed out waiting for wink */
+		LOG_DEBUG(TAG, "Sending Wink timeout PM");
+		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
+		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
+		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_TRUNK_NO_WINK);
+		tinfo->state = TS_RELEASE_TRUNK;
+	}
+		break;
+
+
 
 
 	case TS_SEND_TRUNK_BUSY: {
-		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo);
-		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo);
+		LOG_DEBUG(TAG, "Sending trunk busy PM");
+		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
+		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
 		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_TRUNK_BUSY);
+		tinfo->state = TS_RELEASE_TRUNK;
+	}
+		break;
+
+
+	case TS_RELEASE_TRUNK:
+		/* Release the trunk by sending REG_DROP_CALL to the trunk card, then clean up */
+		Conn.release_tone_generator(tinfo->peer);
+		LOG_DEBUG(TAG, "Sending release command to trunk card %u", this->_trunk_to_service);
+		Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_DROP_CALL);
 		tinfo->state = TS_RESET;
-		}
+		break;
+
 
 	case TS_RESET:
 		/* Release any resources first */
@@ -448,15 +601,18 @@ void Trunk::poll(void) {
 
 
 	default:
+		LOG_ERROR(TAG, "Unhandled state %u", tinfo->state);
 		tinfo->state = TS_RESET;
 		break;
 	}
 
-
+	/*
 	this->_trunk_to_service++;
 	if(this->_trunk_to_service >= MAX_TRUNK_CARDS) {
 		this->_trunk_to_service = 0;
 	}
+	*/
+	this->_trunk_to_service = 2; /* DEBUG */
 
 	osMutexRelease(this->_lock); /* Release the lock */
 

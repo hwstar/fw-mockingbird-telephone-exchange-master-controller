@@ -82,6 +82,9 @@ char *Util::allocate_short_string(void)  {
  */
 
 void Util::deallocate_short_string(char *str) {
+	if(!str) {
+		LOG_PANIC(TAG, "NULL pointer passed in");
+	}
 	_short_strings_allocator.deallocate_object(str);
 }
 
@@ -105,6 +108,9 @@ char *Util::allocate_long_string(void)  {
  */
 
 void Util::deallocate_long_string(char *str) {
+	if(!str) {
+		LOG_PANIC(TAG, "NULL pointer passed in");
+	}
 	_long_strings_allocator.deallocate_object(str);
 }
 
@@ -122,13 +128,12 @@ uint32_t Util::get_num_allocated_long_strings(void) {
 
 char *Util::strncpy_term(char *dest, const char *source, size_t len) {
 	if((!dest) || (!source)) {
-		return NULL;
+		LOG_PANIC(TAG, "NULL pointer passed in");
 	}
 	char *res = strncpy(dest, source, len);
 	dest[len-1] = 0;
 	return res;
 }
-
 
 /*
  * A string compare function which ignores case
@@ -136,12 +141,107 @@ char *Util::strncpy_term(char *dest, const char *source, size_t len) {
 
 int32_t Util::strcasecmp(char const *a, char const *b)
 {
+	if((!a) || (!b)) {
+		LOG_PANIC(TAG, "NULL pointer passed in");
+	}
     for (;; a++, b++) {
         int d = tolower((unsigned char)*a) - tolower((unsigned char)*b);
         if (d != 0 || !*a)
             return d;
     }
 }
+
+/*
+ * Make a trunk dial string from a zero terminated string of subscriber dialed digits.
+ * Adds KP, then an optional prefix, then a slice of user dialed digits, or all of the user dialed digits, then ST.
+ * st_type is an optional parameter, and is set to ST by default, but can be STP (a), ST2P (b) or ST3P (c).
+ *
+ * Returns the created trunk dial string;
+ */
+
+char *Util::make_trunk_dial_string(char *dest, const char *src, uint32_t start, uint32_t end, uint32_t max_len, char *prefix, char st_type) {
+	if((!dest) || (!src)) {
+		LOG_PANIC(TAG, "NULL pointer passed in");
+
+	}
+
+	if(max_len < 3) {
+		LOG_PANIC(TAG, "Bad parameter");
+	}
+
+	uint32_t src_len = strlen(src);
+
+	uint32_t prefix_len;
+	if(prefix) {
+		prefix_len = strlen(prefix);
+
+	}
+	else {
+		prefix_len = 0;
+	}
+
+	uint32_t total_len = 2; /* KP and ST */
+
+	if((start == 0) && ( end == 0)) {
+		/* Not a slice */
+		total_len += src_len + prefix_len;
+	}
+	else {
+		if(start >= end) {
+			LOG_PANIC(TAG, "Bad parameter");
+		}
+		total_len += (end - start) + prefix_len;
+	}
+
+	if(total_len > max_len) {
+		LOG_PANIC(TAG, "Bad parameter");
+	}
+	char *p = prefix;
+	char *d = dest;
+	const char *s = src;
+	uint8_t ml = max_len;
+
+
+	/* Append KP */
+	*d++ = '*';
+	*d = 0;
+	ml--;
+
+	/* Concatenate prefix, if any */
+	if(prefix_len) {
+		while(*p) {
+			*d++ = *p++;
+		}
+		*d = 0;
+
+	}
+
+	/* Copy address */
+	if((start == 0) && (end == 0)) {
+		/* Case all dialed digits */
+		for(uint8_t i = 0; s[i] && ml ; i++, ml--) {
+			*d++ = s[i];
+		}
+
+
+	}
+	else {
+		uint8_t strt_index = start - 1;
+		uint8_t stp_index = end - 1;
+		/* Case slice of dialed digits */
+		ml = (stp_index - strt_index) + 1;
+		for(uint8_t i = strt_index; s[i] && ml; i++, ml-- ) {
+			*d++ = s[i];
+		}
+	}
+
+	/* Append ST */
+
+	*d++ = st_type;
+	*d = 0;
+	return dest;
+}
+
 
 /*
  * Memset

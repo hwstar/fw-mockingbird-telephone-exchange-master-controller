@@ -2,6 +2,7 @@
 #pragma once
 
 #include "top.h"
+#include "mf_receiver.h"
 
 
 /* Logical pin names */
@@ -53,6 +54,10 @@ public:
 	void toggle_gpio_pin(uint32_t logical_pin);
 	bool update_scope_test_point(uint32_t test_point, bool state, const char *tag="nomodule", uint32_t line=0);
 	bool toggle_scope_test_point(uint32_t test_point, const char *tag="nomodule", uint32_t line=0);
+	char *make_trunk_dial_string(char *dest, const char *src, uint32_t start, uint32_t end, uint32_t max_len, char *prefix = NULL, char st_type = '#');
+
+
+
 protected:
 
 };

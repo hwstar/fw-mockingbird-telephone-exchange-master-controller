@@ -378,7 +378,6 @@ void Tone_Plant::worker(void) {
 					break;
 
 				case AS_SEND_SINGLE_TONE:
-					ch_info->is_stoppable = true;
 					this->_generate_tone(ch_info, ch_info->test_tone_freq, ch_info->test_tone_level);
 					ch_info->state = AS_SEND_SINGLE_TONE_WAIT;
 					break;
@@ -386,7 +385,6 @@ void Tone_Plant::worker(void) {
 
 
 				case AS_GEN_DIAL_TONE:
-					ch_info->is_stoppable = true;
 					this->_generate_dual_tone(ch_info,
 						INDICATIONS.dial_tone.tone_pair[0], /* F1 */
 						INDICATIONS.dial_tone.tone_pair[1], /* F2 */
@@ -404,7 +402,6 @@ void Tone_Plant::worker(void) {
 
 				case AS_GEN_BUSY_TONE:
 				case AS_GEN_CONGESTION_TONE:
-					ch_info->is_stoppable = true;
 					if (ch_info->state == AS_GEN_CONGESTION_TONE) {
 						ch_info->cadence_timing = _convert_ms(INDICATIONS.busy.congestion_cadence_ms);
 					}
@@ -449,7 +446,6 @@ void Tone_Plant::worker(void) {
 
 
 				case AS_GEN_RINGING_TONE:
-					ch_info->is_stoppable = true;
 					ch_info->cadence_timer =  _convert_ms(INDICATIONS.ringing.ring_on_cadence_ms);
 
 					this->_generate_dual_tone(ch_info,
@@ -489,7 +485,6 @@ void Tone_Plant::worker(void) {
 
 
 				case AS_SEND_MF:
-					ch_info->is_stoppable = false;
 					if (!ch_info->digit_string_length) { /* Zero length aborts operation */
 						ch_info->state = AS_IDLE;
 					}
@@ -512,16 +507,8 @@ void Tone_Plant::worker(void) {
 					buffer[i] = this->_next_tone_value(ch_info);
 					if (ch_info->cadence_timer == 0){
 						if ((buffer[i] > -TONE_SHUTOFF_THRESHOLD) && (buffer[i] < TONE_SHUTOFF_THRESHOLD)) { /* Shut off close to zero to reduce audio clicking. Changes the tone timing ever so slightly */
-							/* Test for end of tone sequence */
-							if (ch_info->digit_string_index >= ch_info->digit_string_length) {
-								/* Call the callback */
-								ch_info->callback((i & 1) + 1);
-								ch_info->state = AS_IDLE;
-							}
-							else {
 								ch_info->cadence_timer = _convert_ms(MF.inactive_time_ms);
 								ch_info->state = AS_SEND_MF_WAIT_SILENCE_END;
-							}
 						}
 					}
 					else {
@@ -531,16 +518,24 @@ void Tone_Plant::worker(void) {
 
 				case AS_SEND_MF_WAIT_SILENCE_END:
 					if (ch_info->cadence_timer == 0){
-						/* Next tone pair */
-						ch_info->cadence_timer = this->_get_mf_tone_duration(ch_info->digit_string[ch_info->digit_string_index]);
-						this->_generate_dual_tone(ch_info,
+						/* Test for end of tone sequence */
+						if (ch_info->digit_string_index >= ch_info->digit_string_length) {
+							/* Call the callback */
+							ch_info->callback((i & 1) + 1, ch_info->callback_data);
+							ch_info->state = AS_IDLE;
+						}
+						else {
+							/* Next tone pair */
+							ch_info->cadence_timer = this->_get_mf_tone_duration(ch_info->digit_string[ch_info->digit_string_index]);
+							this->_generate_dual_tone(ch_info,
 										MF.tone_pairs[ch_info->digit_string[ch_info->digit_string_index]].low, /* F1 */
 										MF.tone_pairs[ch_info->digit_string[ch_info->digit_string_index]].high, /* F2 */
 										MF.levels.low,/* L1 */
 										MF.levels.high /* L2 */
-									);
-						ch_info->digit_string_index++;
-						ch_info->state = AS_SEND_MF_WAIT_TONE_END;
+										);
+							ch_info->digit_string_index++;
+							ch_info->state = AS_SEND_MF_WAIT_TONE_END;
+						}
 					}
 					else {
 						ch_info->cadence_timer--;
@@ -549,7 +544,6 @@ void Tone_Plant::worker(void) {
 				break;
 
 				case AS_SEND_DTMF:
-					ch_info->is_stoppable = false;
 					if (!ch_info->digit_string_length) { /* Zero length aborts operation */
 						ch_info->state = AS_IDLE;
 					}
@@ -572,16 +566,8 @@ void Tone_Plant::worker(void) {
 					buffer[i] = this->_next_tone_value(ch_info);
 					if (ch_info->cadence_timer == 0){
 						if ((buffer[i] > -TONE_SHUTOFF_THRESHOLD) && (buffer[i] < TONE_SHUTOFF_THRESHOLD)) { /* Shut off close to zero to reduce audio clicking. Changes the tone timing ever so slightly */
-							/* Test for end of tone sequence */
-							if (ch_info->digit_string_index >= ch_info->digit_string_length) {
-								/* Call the callback */
-								ch_info->callback((i & 1) + 1);
-								ch_info->state = AS_IDLE;
-							}
-							else {
-								ch_info->cadence_timer = this->_convert_ms(DTMF.inactive_time_ms);
-								ch_info->state = AS_SEND_DTMF_WAIT_SILENCE_END;
-							}
+							ch_info->cadence_timer = this->_convert_ms(DTMF.inactive_time_ms);
+							ch_info->state = AS_SEND_DTMF_WAIT_SILENCE_END;
 						}
 					}
 					else {
@@ -591,16 +577,24 @@ void Tone_Plant::worker(void) {
 
 				case AS_SEND_DTMF_WAIT_SILENCE_END:
 					if (ch_info->cadence_timer == 0){
-						/* Next tone pair */
-						ch_info->cadence_timer = this->_convert_ms(DTMF.active_time_ms);
-						this->_generate_dual_tone(ch_info,
-										DTMF.tone_pairs[ch_info->digit_string[ch_info->digit_string_index]].low, /* F1 */
-										DTMF.tone_pairs[ch_info->digit_string[ch_info->digit_string_index]].high, /* F2 */
-										DTMF.levels.low,/* L1 */
-										DTMF.levels.high /* L2 */
-									);
-						ch_info->digit_string_index++;
-						ch_info->state = AS_SEND_DTMF_WAIT_TONE_END;
+						/* Test for end of tone sequence */
+						if (ch_info->digit_string_index >= ch_info->digit_string_length) {
+							/* Call the callback */
+							ch_info->callback((i & 1) + 1, ch_info->callback_data);
+							ch_info->state = AS_IDLE;
+						}
+						else {
+							/* Next tone pair */
+							ch_info->cadence_timer = this->_convert_ms(DTMF.active_time_ms);
+							this->_generate_dual_tone(ch_info,
+											DTMF.tone_pairs[ch_info->digit_string[ch_info->digit_string_index]].low, /* F1 */
+											DTMF.tone_pairs[ch_info->digit_string[ch_info->digit_string_index]].high, /* F2 */
+											DTMF.levels.low,/* L1 */
+											DTMF.levels.high /* L2 */
+										);
+							ch_info->digit_string_index++;
+							ch_info->state = AS_SEND_DTMF_WAIT_TONE_END;
+						}
 					}
 					else {
 						ch_info->cadence_timer--;
@@ -609,7 +603,6 @@ void Tone_Plant::worker(void) {
 
 				case AS_SEND_AUDIO_LOOP:
 				case AS_SEND_AUDIO_LOOP_ULAW:
-					ch_info->is_stoppable = true;
 					ch_info->audio_sample_index = 0l;
 					ch_info->state = (ch_info->state == AS_SEND_AUDIO_LOOP) ?
 							AS_SEND_AUDIO_LOOP_WAIT :
@@ -637,7 +630,6 @@ void Tone_Plant::worker(void) {
 
 				case AS_SEND_AUDIO:
 				case AS_SEND_AUDIO_ULAW:
-					ch_info->is_stoppable = false;
 					ch_info->audio_sample_index = 0l;
 					ch_info->state = (ch_info->state == AS_SEND_AUDIO) ?
 								AS_SEND_AUDIO_WAIT :
@@ -658,7 +650,7 @@ void Tone_Plant::worker(void) {
 					}
 					if(ch_info->audio_sample_index >= ch_info->audio_sample_size) {
 						/* Call the callback */
-						ch_info->callback((i & 1) + 1);
+						ch_info->callback((i & 1) + 1, ch_info->callback_data);
 						ch_info->state = AS_IDLE;
 					}
 					break;
@@ -850,7 +842,7 @@ void Tone_Plant::send_call_progress_tones(uint32_t descriptor, uint8_t type) {
  * Send a set of digits using MF tones.
  * Call the callback function when the all the digits are sent
  */
-void Tone_Plant::send_mf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number)) {
+void Tone_Plant::send_mf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number, void *data), void *data) {
 
 	if(!this->_validate_descriptor(descriptor)) {
 		LOG_PANIC(TAG, "Invalid descriptor");
@@ -862,6 +854,8 @@ void Tone_Plant::send_mf(int32_t descriptor, const char *digit_string, void (*ca
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 	channelInfo *ch_info = &this->_channel_info[descriptor];
+
+
 
 	int len = strlen(digit_string);
 	ch_info->digit_string_length = 0;
@@ -907,7 +901,7 @@ void Tone_Plant::send_mf(int32_t descriptor, const char *digit_string, void (*ca
 	}
 
 
-
+	ch_info->callback_data = data;
 	ch_info->callback = callback;
 	ch_info->state = AS_SEND_MF;
 
@@ -920,7 +914,7 @@ void Tone_Plant::send_mf(int32_t descriptor, const char *digit_string, void (*ca
  * Send a set of digis using DTMF tones.
  * Call the callback function when the all the digits are sent
  */
-void Tone_Plant::send_dtmf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number)) {
+void Tone_Plant::send_dtmf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number, void *data), void *data) {
 	if(!this->_validate_descriptor(descriptor)) {
 		LOG_PANIC(TAG, "Invalid descriptor");
 	}
@@ -980,6 +974,8 @@ void Tone_Plant::send_dtmf(int32_t descriptor, const char *digit_string, void (*
 		if(!digit_string[i])
 			break;
 	}
+
+	ch_info->callback_data = data;
 	ch_info->callback = callback;
 	ch_info->state = AS_SEND_DTMF;
 
@@ -1018,7 +1014,7 @@ void Tone_Plant::send_single_tone(uint32_t descriptor, float freq, float level) 
  */
 
 void Tone_Plant::send(int32_t descriptor, const int16_t *samples,
-	uint32_t length, void (*callback)(uint32_t channel_number), float level) {
+	uint32_t length, void (*callback)(uint32_t channel_number, void *data), void *data, float level) {
 
 	if (!this->_validate_descriptor(descriptor)) {
 		LOG_PANIC(TAG, "Invalid descriptor");
@@ -1034,6 +1030,7 @@ void Tone_Plant::send(int32_t descriptor, const int16_t *samples,
 	channelInfo *ch_info = &this->_channel_info[descriptor];
 
 	ch_info->audio_samples_level = pow(10,(level/20));
+	ch_info->callback_data = data;
 	ch_info->callback = callback;
 	ch_info->audio_sample_size = length;
 	ch_info->audio_sample_halfwords = samples;
@@ -1048,7 +1045,7 @@ void Tone_Plant::send(int32_t descriptor, const int16_t *samples,
  */
 
 void Tone_Plant::send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t length,
-	void (*callback)(uint32_t channel_number), float level) {
+	void (*callback)(uint32_t channel_number, void *data), void *data, float level) {
 
 	if (!this->_validate_descriptor(descriptor)) {
 		LOG_PANIC(TAG, "Invalid descriptor");
@@ -1063,6 +1060,7 @@ void Tone_Plant::send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t 
 	channelInfo *ch_info = &this->_channel_info[descriptor];
 
 	ch_info->audio_samples_level = pow(10,(level/20));
+	ch_info->callback_data = data;
 	ch_info->callback = callback;
 	ch_info->audio_sample_size = length;
 	ch_info->audio_sample_bytes = samples;
@@ -1081,7 +1079,7 @@ void Tone_Plant::send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t 
  */
 
 bool Tone_Plant::send_buffer_ulaw(int32_t descriptor,
-	const char *buffer_name, void (*callback)(uint32_t channel_number), float level) {
+	const char *buffer_name, void (*callback)(uint32_t channel_number, void *data), void *data,  float level) {
 
 	uint32_t size;
 	uint8_t *buffer = this->get_audio_buffer(buffer_name, &size);
@@ -1089,7 +1087,7 @@ bool Tone_Plant::send_buffer_ulaw(int32_t descriptor,
 		return false;
 	}
 
-	this->send_ulaw(descriptor, buffer, size, callback, level);
+	this->send_ulaw(descriptor, buffer, size, callback, data, level);
 
 	return true;
 }

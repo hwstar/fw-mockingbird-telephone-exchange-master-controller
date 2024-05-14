@@ -84,8 +84,8 @@ typedef struct saiData {
 /* Channel-specific data */
 
 typedef struct channelInfo {
-	bool is_stoppable;
-	void (*callback)(uint32_t descriptor);
+	void *callback_data;
+	void (*callback)(uint32_t descriptor, void *data);
 	uint8_t state;
 	uint8_t digit_string[DIGIT_STRING_MAX_LENGTH];
 	float f1;
@@ -241,11 +241,11 @@ public:
 	void setup(void);
 	void init(void);
 	void send_call_progress_tones(uint32_t channel_number, uint8_t type);
-	void send_mf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number));
-	void send_dtmf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number));
-	void send(int32_t descriptor, const int16_t *samples, uint32_t length, void (*callback)(uint32_t channel_number), float level = 0.0);
-	void send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t length, void (*callback)(uint32_t channel_number), float level = 0.0);
-	bool send_buffer_ulaw(int32_t descriptor, const char *buffer_name, void (*callback)(uint32_t channel_number), float level = 0.0);
+	void send_mf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number, void *data), void *data = NULL);
+	void send_dtmf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number, void *data), void *data = NULL);
+	void send(int32_t descriptor, const int16_t *samples, uint32_t length, void (*callback)(uint32_t channel_number, void *data), void *data = NULL, float level = 0.0);
+	void send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t length, void (*callback)(uint32_t channel_number, void *data), void *data = NULL, float level = 0.0);
+	bool send_buffer_ulaw(int32_t descriptor, const char *buffer_name, void (*callback)(uint32_t channel_number, void *data), void *data = NULL, float level = 0.0);
 	void send_loop(int32_t descriptor, const int16_t *samples, uint32_t length, float level = 0.0);
 	void send_loop_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t length, float level = 0.0);
 	bool send_buffer_loop_ulaw(int32_t descriptor, const char *buffer_name, float level = 0.0);

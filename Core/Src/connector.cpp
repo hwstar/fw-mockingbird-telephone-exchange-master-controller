@@ -27,6 +27,7 @@ static const Route_Table_Entry line_route_table_entries[] = {
 {"2980405", ET_LINE, 0, 0, 1, {5}},
 {"2980406", ET_LINE, 0, 0, 1, {6}},
 {"2980407", ET_LINE, 0, 0, 1, {7}},
+{"_298XXXX", ET_TRUNK,0, 0, 1, {2}},
 
 {"", ET_UNDEF, 0, 0, 0, {0}}, /* Marks the end of the route table */
 
@@ -118,8 +119,8 @@ void Connector::init(void) {
 		/* Add the route */
 		this->add_route(0, line_route_table_entries[index].dest_equip_type,
 			line_route_table_entries[index].phys_line_trunk_count,
-			0,
-			0,
+			line_route_table_entries[index].trunk_addressing_start,
+			line_route_table_entries[index].trunk_addressing_end,
 			line_route_table_entries[index].phys_lines_trunks,
 			line_route_table_entries[index].match_string
 			);
@@ -130,8 +131,8 @@ void Connector::init(void) {
 		/* Add the route */
 		this->add_route(1, incoming_trunk_route_table_entries[index].dest_equip_type,
 			incoming_trunk_route_table_entries[index].phys_line_trunk_count,
-			0,
-			0,
+			line_route_table_entries[index].trunk_addressing_start,
+			line_route_table_entries[index].trunk_addressing_end,
 			incoming_trunk_route_table_entries[index].phys_lines_trunks,
 			incoming_trunk_route_table_entries[index].match_string
 			);
@@ -305,6 +306,10 @@ uint32_t Connector::resolve(Conn_Info *conn_info) {
 
 	case PMR_BUSY:
 		res = ROUTE_DEST_BUSY;
+		break;
+
+	case PMR_TRUNK_BUSY:
+		res = ROUTE_DEST_CONGESTED;
 		break;
 
 	default:
