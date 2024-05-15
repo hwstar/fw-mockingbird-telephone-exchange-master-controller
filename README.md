@@ -22,3 +22,5 @@ Features:
 * Supports up to 8 subscriber lines using 4 dual line cards.
 * Supports up to 3 E&M trunk cards.
 
+Demo of the project on youtube: https://www.youtube.com/watch?v=1S4Ybc_A4XE
+

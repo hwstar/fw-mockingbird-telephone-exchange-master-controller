@@ -321,8 +321,25 @@ uint32_t Connector::resolve(Conn_Info *conn_info) {
 	return res;
 }
 
-/* This function sends a message to the other end of the connection */
-/* For use by lines and trunks only in the event process. Does not respect locking */
+
+
+/*
+ * This function sends a message to the other end of the connection
+ * For use by lines and trunks only in the event process.
+ * Does not respect locking
+ * The first signature extracts the destination to be messaged from the peer connection info
+ * The second signature allows permits messages to be sent to an arbitrary destination
+ */
+
+
+uint32_t Connector::send_peer_message(Conn_Info *conn_info, uint32_t message) {
+	if((!conn_info) || (!conn_info->peer)) {
+		LOG_PANIC(TAG, "Null pointer passed in");
+	}
+	uint32_t equip_type = Conn.get_caller_equip_type(conn_info->peer);
+	uint32_t phys_line_trunk_number = Conn.get_caller_phys_line_trunk(conn_info->peer);
+	return this->send_peer_message(conn_info, equip_type, phys_line_trunk_number, message);
+}
 
 uint32_t Connector::send_peer_message(Conn_Info *conn_info, uint32_t dest_equip_type,
 		uint32_t dest_phys_line_trunk_number, uint32_t message) {

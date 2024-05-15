@@ -99,9 +99,13 @@ public:
 	void prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32_t source_phys_line_number);
 	uint32_t test(Conn_Info *conn_info, const char *digits_received);
 	uint32_t resolve(Conn_Info *conn_info);
+
 	/* For use by lines and trunks only in the event process. Does not respect locking */
+	/* 2 signatures */
+	uint32_t send_peer_message(Conn_Info *conn_info, uint32_t message);
 	uint32_t send_peer_message(Conn_Info *conn_info, uint32_t dest_equip_type,
 			uint32_t dest_phys_line_trunk_number, uint32_t message);
+
 	uint32_t get_caller_equip_type(Conn_Info *conn_info);
 	uint32_t get_caller_phys_line_trunk(Conn_Info *conn_info);
 	uint32_t get_called_equip_type(Conn_Info *conn_info);

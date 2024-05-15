@@ -302,7 +302,7 @@ void Trunk::init(void) {
 
 /*
  * Test for a pending state, if there is one, set the current state to it,
- * thien clear the pending state and return true.
+ * then clear the pending state and return true.
  *
  * If there is no pending state, return false;
  */
@@ -470,6 +470,7 @@ void Trunk::poll(void) {
 
 
 	case TS_OUTGOING_START:
+		/* Test for call drop */
 		if(this->_test_pending_state(tinfo)) {
 			break;
 		}
@@ -493,6 +494,7 @@ void Trunk::poll(void) {
 		break;
 
 	case TS_OUTGOING_REQUEST_ADDR_INFO: {
+		/* Test for call drop */
 		if(this->_test_pending_state(tinfo)) {
 			break;
 		}
@@ -500,22 +502,22 @@ void Trunk::poll(void) {
 		/* Got the wink event */
 		/* Send message to caller to request address information */
 		/* LOG_DEBUG(TAG, "Sending Ready for Address Info"); */
-		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
-		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
-		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_TRUNK_READY_FOR_ADDR_INFO);
+		Conn.send_peer_message(tinfo, Connector::PM_TRUNK_READY_FOR_ADDR_INFO);
 		tinfo->state = TS_OUTGOING_WAIT_ADDR_INFO;
 	}
 		break;
 
 	case TS_OUTGOING_WAIT_ADDR_INFO:
+		/* Wait for caller state machine to send address information */
+		/* Test for call drop */
 		if(this->_test_pending_state(tinfo)) {
 			break;
 		}
-		/* Wait for caller state machine to send address information */
 		break;
 
 
 	case TS_OUTGOING_SEND_ADDR_INFO:
+		/* Test for call drop */
 		if(this->_test_pending_state(tinfo)) {
 				break;
 		}
@@ -533,6 +535,7 @@ void Trunk::poll(void) {
 		break;
 
 	case TS_OUTGOING_SEND_ADDR_INFO_B:
+		/* Test for call drop */
 		if(this->_test_pending_state(tinfo)) {
 				break;
 		}
@@ -540,6 +543,7 @@ void Trunk::poll(void) {
 		break;
 
 	case TS_OUTGOING_SEND_ADDR_INFO_C: {
+		/* Test for call drop */
 		if(this->_test_pending_state(tinfo)) {
 				break;
 		}
@@ -552,14 +556,13 @@ void Trunk::poll(void) {
 		Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_OUTGOING_ADDR_COMPLETE);
 
 		/* Send message to peer that the caller can now be connected. */
-		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
-		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
-		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_TRUNK_READY_TO_CONNECT_CALLER);
+		Conn.send_peer_message(tinfo, Connector::PM_TRUNK_READY_TO_CONNECT_CALLER);
 		tinfo->state = TS_OUTGOING_WAIT_SUPV;
 	}
 		break;
 
 	case TS_OUTGOING_WAIT_SUPV:
+		/* Test for call drop */
 		if(this->_test_pending_state(tinfo)) {
 				break;
 		}
@@ -567,16 +570,15 @@ void Trunk::poll(void) {
 		break;
 
 	case TS_OUTGOING_ANSWERED: {
-		/* The party on the far end of the trunk answered */
-		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
-		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
-		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_ANSWERED);
+		/* The party on the far end of the trunk has answered */
+		Conn.send_peer_message(tinfo, Connector::PM_ANSWERED);
 		tinfo->state = TS_OUTGOING_IN_CALL;
 	}
 		break;
 
 
 	case TS_OUTGOING_IN_CALL:
+		/* Test for call drop */
 		if(this->_test_pending_state(tinfo)) {
 			break;
 		}
@@ -585,9 +587,7 @@ void Trunk::poll(void) {
 
 	case TS_OUTGOING_SEND_FAREND_DISC: {
 		/* Received disconnect from the far end of a trunk */
-		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
-		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
-		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_CALLED_PARTY_HUNGUP);
+		Conn.send_peer_message(tinfo, Connector::PM_CALLED_PARTY_HUNGUP);
 		tinfo->state = TS_RESET;
 	}
 		break;
@@ -597,9 +597,7 @@ void Trunk::poll(void) {
 	case TS_GOT_NO_WINK: {
 		/* Timed out waiting for wink */
 		/* LOG_DEBUG(TAG, "Sending Wink timeout PM"); */
-		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
-		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
-		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_TRUNK_NO_WINK);
+		Conn.send_peer_message(tinfo, Connector::PM_TRUNK_NO_WINK);
 		tinfo->state = TS_RELEASE_TRUNK;
 	}
 		break;
@@ -609,9 +607,7 @@ void Trunk::poll(void) {
 
 	case TS_SEND_TRUNK_BUSY: {
 		/* LOG_DEBUG(TAG, "Sending trunk busy PM"); */
-		uint32_t source_equip_type = Conn.get_caller_equip_type(tinfo->peer);
-		uint32_t source_line_trunk_number = Conn.get_caller_phys_line_trunk(tinfo->peer);
-		Conn.send_peer_message(tinfo, source_equip_type, source_line_trunk_number, Connector::PM_TRUNK_BUSY);
+		Conn.send_peer_message(tinfo, Connector::PM_TRUNK_BUSY);
 		tinfo->state = TS_RELEASE_TRUNK;
 	}
 		break;
@@ -627,6 +623,7 @@ void Trunk::poll(void) {
 
 
 	case TS_RESET:
+		/* Clean up */
 		/* Release any resources first */
 		Conn.release_tone_generator(tinfo);
 		Conn.release_mf_receiver(tinfo);
