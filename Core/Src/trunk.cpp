@@ -219,7 +219,12 @@ uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t p
 	case Connector::PM_RELEASE:
 		/* Release trunk used for outgoing call */
 		/* LOG_DEBUG(TAG, "Got release from peer, current state is %u", tinfo->state); */
-		tinfo->release_request = true;
+		if(!tinfo->pending_state) {
+			tinfo->pending_state = TS_RELEASE_TRUNK;
+		}
+		else {
+			LOG_ERROR(TAG, "Pending state set previously");
+		}
 		break;
 
 
@@ -283,7 +288,7 @@ void Trunk::init(void) {
 		tinfo->route_table_number = 1;
 
 		tinfo->state = TS_IDLE;
-		tinfo->release_request = false;
+		tinfo->pending_state = TS_IDLE;
 		tinfo->phys_line_trunk_number = index;
 		tinfo->equip_type = Connector::ET_TRUNK;
 		tinfo->tone_plant_descriptor = tinfo->mf_receiver_descriptor = tinfo->dtmf_receiver_descriptor = -1;
@@ -293,6 +298,28 @@ void Trunk::init(void) {
 
 
 }
+
+
+/*
+ * Test for a pending state, if there is one, set the current state to it,
+ * thien clear the pending state and return true.
+ *
+ * If there is no pending state, return false;
+ */
+
+bool Trunk::_test_pending_state(Connector::Conn_Info *tinfo) {
+	if(!tinfo) {
+		LOG_PANIC(TAG, "Null pointer passed in");
+	}
+	if(tinfo->pending_state) {
+			tinfo->state = tinfo->pending_state;
+			tinfo->pending_state = TS_IDLE;
+			return true;
+		}
+	return false;
+}
+
+
 
 /*
  * Called repeatedly by event task
@@ -364,10 +391,7 @@ void Trunk::poll(void) {
 
 			case Connector::ROUTE_DEST_BUSY:
 				tinfo->state = TS_SEND_BUSY;
-				break;		if(tinfo->release_request) {
-					tinfo->state = TS_RELEASE_TRUNK;
-					break;
-				}
+				break;
 
 			case Connector::ROUTE_DEST_CONNECTED:
 				tinfo->state = TS_SEND_RINGING;
@@ -446,10 +470,10 @@ void Trunk::poll(void) {
 
 
 	case TS_OUTGOING_START:
-		if(tinfo->release_request) {
-			tinfo->state = TS_RELEASE_TRUNK;
+		if(this->_test_pending_state(tinfo)) {
 			break;
 		}
+
 		/* Seize the trunk */
 		/* LOG_DEBUG(TAG, "Send seize trunk command to card, wait for wink or busy"); */
 		Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_SEIZE_TRUNK);
@@ -463,15 +487,13 @@ void Trunk::poll(void) {
 		 * 3. receive wink time out event.
 		 * 4. caller hangs up.
 		 */
-		if(tinfo->release_request) {
-			tinfo->state = TS_RELEASE_TRUNK;
+		if(this->_test_pending_state(tinfo)) {
 			break;
 		}
 		break;
 
 	case TS_OUTGOING_REQUEST_ADDR_INFO: {
-		if(tinfo->release_request) {
-			tinfo->state = TS_RELEASE_TRUNK;
+		if(this->_test_pending_state(tinfo)) {
 			break;
 		}
 
@@ -486,8 +508,7 @@ void Trunk::poll(void) {
 		break;
 
 	case TS_OUTGOING_WAIT_ADDR_INFO:
-		if(tinfo->release_request) {
-			tinfo->state = TS_RELEASE_TRUNK;
+		if(this->_test_pending_state(tinfo)) {
 			break;
 		}
 		/* Wait for caller state machine to send address information */
@@ -495,9 +516,8 @@ void Trunk::poll(void) {
 
 
 	case TS_OUTGOING_SEND_ADDR_INFO:
-		if(tinfo->release_request) {
-			tinfo->state = TS_RELEASE_TRUNK;
-			break;
+		if(this->_test_pending_state(tinfo)) {
+				break;
 		}
 		/* Seize a tone plant channel */
 		/* Utilize the peer data structure for this */
@@ -513,17 +533,15 @@ void Trunk::poll(void) {
 		break;
 
 	case TS_OUTGOING_SEND_ADDR_INFO_B:
-		if(tinfo->release_request) {
-			tinfo->state = TS_RELEASE_TRUNK;
-			break;
+		if(this->_test_pending_state(tinfo)) {
+				break;
 		}
 		/* Wait for MF digits to be sent */
 		break;
 
 	case TS_OUTGOING_SEND_ADDR_INFO_C: {
-		if(tinfo->release_request) {
-			tinfo->state = TS_RELEASE_TRUNK;
-			break;
+		if(this->_test_pending_state(tinfo)) {
+				break;
 		}
 		/* MF Digits have been sent */
 		/* Release the tone generator */
@@ -542,9 +560,8 @@ void Trunk::poll(void) {
 		break;
 
 	case TS_OUTGOING_WAIT_SUPV:
-		if(tinfo->release_request) {
-			tinfo->state = TS_RELEASE_TRUNK;
-			break;
+		if(this->_test_pending_state(tinfo)) {
+				break;
 		}
 		/* Call connected, wait for called party to answer */
 		break;
@@ -560,8 +577,7 @@ void Trunk::poll(void) {
 
 
 	case TS_OUTGOING_IN_CALL:
-		if(tinfo->release_request) {
-			tinfo->state = TS_RELEASE_TRUNK;
+		if(this->_test_pending_state(tinfo)) {
 			break;
 		}
 		/* In an outgoing call over a trunk */
@@ -621,7 +637,7 @@ void Trunk::poll(void) {
 			Xps_logical.release(&tinfo->jinfo);
 			tinfo->junctor_seized = false;
 		}
-		tinfo->release_request = false;
+		tinfo->pending_state = TS_IDLE;
 		tinfo->called_party_hangup = false;
 		tinfo->peer = NULL;
 		tinfo->state = TS_IDLE;

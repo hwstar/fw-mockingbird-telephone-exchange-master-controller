@@ -7,7 +7,7 @@ Json_RW::Json_RW Json_rw;
 
 namespace Json_RW {
 
-static const char *TAG = "jsonrw";
+/* static const char *TAG = "jsonrw"; */
 
 
 void Json_RW::init(void) {

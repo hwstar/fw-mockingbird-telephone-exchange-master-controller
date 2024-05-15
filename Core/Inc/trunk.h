@@ -35,6 +35,7 @@ protected:
 	uint8_t _trunk_to_service;
 	osMutexId_t _lock;
 	Connector::Conn_Info _conn_info[MAX_TRUNK_CARDS];
+	bool _test_pending_state(Connector::Conn_Info *tinfo);
 
 
 

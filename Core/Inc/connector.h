@@ -61,11 +61,12 @@ typedef struct Route_Info {
 
 
 typedef struct Conn_Info {
-	bool release_request;
+
 	uint8_t route_table_number;
 	uint8_t phys_line_trunk_number;
 	uint8_t equip_type;
 	uint8_t state;
+	uint8_t pending_state;
 	bool called_party_hangup;
 	bool junctor_seized;
 	int16_t tone_plant_descriptor;
