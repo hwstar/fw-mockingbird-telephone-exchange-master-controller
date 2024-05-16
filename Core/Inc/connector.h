@@ -100,7 +100,9 @@ public:
 	uint32_t test(Conn_Info *conn_info, const char *digits_received);
 	uint32_t resolve(Conn_Info *conn_info);
 
+	/* Peer-to-peer messaging */
 	/* For use by lines and trunks only in the event process. Does not respect locking */
+	uint32_t send_message_to_dest(Conn_Info *conn_info, uint32_t message);
 	/* 2 signatures */
 	uint32_t send_peer_message(Conn_Info *conn_info, uint32_t message);
 	uint32_t send_peer_message(Conn_Info *conn_info, uint32_t dest_equip_type,

@@ -417,9 +417,7 @@ void Trunk::poll(void) {
 		break;
 
 	case TS_RINGING_TEARDOWN: {
-		uint32_t dest_equip_type = Conn.get_called_equip_type(tinfo);
-		uint32_t dest_line_trunk_number = Conn.get_called_phys_line_trunk(tinfo);
-		Conn.send_peer_message(tinfo, dest_equip_type, dest_line_trunk_number, Connector::PM_RELEASE);
+		Conn.send_message_to_dest(tinfo, Connector::PM_RELEASE);
 		tinfo->state = TS_RESET;
 	}
 		break;

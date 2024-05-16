@@ -468,9 +468,7 @@ void Sub_Line::poll(void) {
 		LOG_DEBUG(TAG, "Trunk dialed digits: %s", linfo->trunk_outgoing_address);
 
 		/* Tell the trunk the address has been formatted and is ready to send */
-		uint32_t dest_equip_type = Conn.get_called_equip_type(linfo);
-		uint32_t dest_phys_line_trunk_number = Conn.get_called_phys_line_trunk(linfo);
-		Conn.send_peer_message(linfo, dest_equip_type, dest_phys_line_trunk_number, Connector::PM_TRUNK_ADDR_INFO_READY);
+		Conn.send_message_to_dest(linfo, Connector::PM_TRUNK_ADDR_INFO_READY);
 
 		/* Wait for address info to be sent */
 		linfo->state = LS_TRUNK_WAIT_ADDR_SENT;
@@ -494,9 +492,7 @@ void Sub_Line::poll(void) {
 
 	case LS_TRUNK_OUTGOING_RELEASE: { /* Caller perspective */
 		/* Send peer message to release trunk due to a subscriber hanging up */
-		uint32_t dest_equip_type = Conn.get_called_equip_type(linfo);
-		uint32_t dest_phys_line_trunk_number = Conn.get_called_phys_line_trunk(linfo);
-		Conn.send_peer_message(linfo, dest_equip_type, dest_phys_line_trunk_number, Connector::PM_RELEASE);
+		Conn.send_message_to_dest(linfo, Connector::PM_RELEASE);
 		linfo->state = LS_RESET;
 
 	}
@@ -585,9 +581,7 @@ void Sub_Line::poll(void) {
 	case LS_END_CALL: /* Caller perspective */
 	{
 		/* Send message to called party to end the call on their end */
-		uint32_t phys_line_trunk = Conn.get_called_phys_line_trunk(linfo);
-		uint32_t equip_type = Conn.get_called_equip_type(linfo);
-		Conn.send_peer_message(linfo, equip_type, phys_line_trunk, Connector::PM_RELEASE);
+		Conn.send_message_to_dest(linfo, Connector::PM_RELEASE);
 		linfo->state = LS_RESET;
 	}
 		break;
@@ -616,9 +610,7 @@ void Sub_Line::poll(void) {
 	case LS_ANSWER: /* Called perspective */
 		{
 			/* Send message back to caller that the called party answered */
-			uint32_t caller_equip_type = Conn.get_caller_equip_type(linfo->peer);
-			uint32_t caller_phys_number = Conn.get_caller_phys_line_trunk(linfo->peer);
-			Conn.send_peer_message(linfo, caller_equip_type, caller_phys_number , Connector::PM_ANSWERED);
+			Conn.send_peer_message(linfo, Connector::PM_ANSWERED);
 			LOG_DEBUG(TAG, "Setting call state to LS_ANSWERED");
 			linfo->state = LS_ANSWERED;
 		}
@@ -629,9 +621,7 @@ void Sub_Line::poll(void) {
 
 	case LS_CALLED_PARTY_HUNGUP: /* Called perspective */
 		{
-			uint32_t caller_equip_type = Conn.get_caller_equip_type(linfo->peer);
-			uint32_t caller_phys_number = Conn.get_caller_phys_line_trunk(linfo->peer);
-			Conn.send_peer_message(linfo, caller_equip_type, caller_phys_number, Connector::PM_CALLED_PARTY_HUNGUP);
+			Conn.send_peer_message(linfo, Connector::PM_CALLED_PARTY_HUNGUP);
 			linfo->state = LS_RESET;
 		}
 		break;

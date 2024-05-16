@@ -321,6 +321,19 @@ uint32_t Connector::resolve(Conn_Info *conn_info) {
 	return res;
 }
 
+/*
+ * Send message to called destination
+ * For use by lines and trunks only in the event process.
+ * Does not respect locking
+ * The first signature extracts the destination to be messaged from the peer connection info
+ * The second signature allows permits messages to be sent to an arbitrary destination
+ */
+
+uint32_t Connector::send_message_to_dest(Conn_Info *conn_info, uint32_t message) {
+	uint32_t dest_equip_type = this->get_called_equip_type(conn_info);
+	uint32_t dest_phys_line_trunk_number = this->get_called_phys_line_trunk(conn_info);
+	return this->send_peer_message(conn_info, dest_equip_type, dest_phys_line_trunk_number, message);
+}
 
 
 /*
