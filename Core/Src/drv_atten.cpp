@@ -1,5 +1,6 @@
 #include "top.h"
 #include "logging.h"
+#include "err_handler.h"
 #include "util.h"
 #include "drv_atten.h"
 
@@ -14,7 +15,7 @@ static const uint8_t lookup[MAX_NUM_CARDS] = {ATTEN0, ATTEN1, ATTEN2, ATTEN3, AT
 bool Atten::get_state(uint32_t card) {
 
 	if(card >= MAX_NUM_CARDS) {
-		LOG_PANIC(TAG, "Card number out of range");
+		POST_ERROR(Err_Handler::EH_IVCN);
 	}
 
 	return Utility.get_gpio_pin_state(lookup[card]);

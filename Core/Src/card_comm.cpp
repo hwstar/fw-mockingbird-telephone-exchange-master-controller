@@ -1,5 +1,6 @@
 #include "top.h"
 #include "logging.h"
+#include "err_handler.h"
 #include "card_comm.h"
 #include "drv_atten.h"
 #include "i2c_engine.h"
@@ -38,7 +39,7 @@ void Card_Comm::_event_callback(uint32_t type, uint32_t status, uint32_t trans_i
 	uint32_t card = trans_id;
 
 	if(card >= Atten::MAX_NUM_CARDS) {
-		LOG_PANIC(TAG, "Invalid card number");
+		POST_ERROR(Err_Handler::EH_IVCN);
 	}
 
 	if(status != I2C_Engine::I2CEC_OK) {
@@ -84,14 +85,14 @@ void Card_Comm::init(void) {
 bool Card_Comm::queue_get_event_request(uint32_t card, Event_Handler handler) {
 	bool res = true;
 	if(card >= Atten::MAX_NUM_CARDS) {
-		LOG_PANIC(TAG,"Card number out of range");
+		POST_ERROR(Err_Handler::EH_IVCN);
 	}
 
 	/* Get the lock */
 	osStatus status = osMutexAcquire(this->_lock, osWaitForever);
 
 	if(status != osOK) {
-		LOG_PANIC(TAG, "Lock acquisition failed, RTOS status %d", status);
+		POST_ERROR(Err_Handler::EH_LAF);
 	}
 
 
@@ -136,17 +137,17 @@ bool Card_Comm::send_command(uint32_t resource_type, uint32_t resource, uint32_t
 
 	/* Sanity checking */
 	if((resource_type != RT_LINE) && (resource_type != RT_TRUNK)) {
-		LOG_PANIC(TAG, "Bad resource type");
+		POST_ERROR(Err_Handler::EH_IRT);
 	}
 
 	if(resource_type == RT_LINE) {
 		if(resource >= (Sub_Line::MAX_DUAL_LINE_CARDS * 2)) {
-			LOG_PANIC(TAG, "Bad physical line number");
+			POST_ERROR(Err_Handler::EH_IPLN);
 		}
 	}
 	else {
 		if(resource >= Trunk::MAX_TRUNK_CARDS) {
-			LOG_PANIC(TAG, "Bad trunk number");
+			POST_ERROR(Err_Handler::EH_ITN);
 		}
 	}
 
@@ -156,8 +157,8 @@ bool Card_Comm::send_command(uint32_t resource_type, uint32_t resource, uint32_t
 	osStatus status = osMutexAcquire(this->_lock, osWaitForever);
 
 	if(status != osOK) {
-			LOG_PANIC(TAG, "Lock acquisition failed, RTOS status %d", status);
-		}
+		POST_ERROR(Err_Handler::EH_LAF);
+	}
 
 	if(resource_type == RT_LINE) {
 		uint32_t data_length = 1;

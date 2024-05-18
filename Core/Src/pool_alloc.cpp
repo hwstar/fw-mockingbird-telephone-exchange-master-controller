@@ -1,6 +1,7 @@
 #include "top.h"
 #include "util.h"
 #include "logging.h"
+#include "err_handler.h"
 #include "pool_alloc.h"
 
 
@@ -31,7 +32,7 @@ void Pool_Alloc::pool_init(void *memory_pool, uint32_t object_size, uint32_t num
 
 	this->_lock = osMutexNew(&pool_allocator_mutex_attr);
 	if (this->_lock == NULL) {
-		LOG_PANIC(TAG, "Could not create lock");
+		POST_ERROR(Err_Handler::EH_LCE);
 	}
 
 
@@ -61,7 +62,7 @@ void Pool_Alloc::pool_init(void *memory_pool, uint32_t object_size, uint32_t num
 void *Pool_Alloc::allocate_object(void) {
 
 	if((!this->_block_begin) || (!this->_alloc_ptr)) {
-		LOG_PANIC(TAG, "Allocator out of memory");
+		POST_ERROR(Err_Handler::EH_AOOM);
 	}
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
@@ -76,7 +77,7 @@ void *Pool_Alloc::allocate_object(void) {
 
 	/* Check the magic number */
 	if((reinterpret_cast<Free_Object_Type *>(allocated_object))->magic != ALLOC_MAGIC) {
-		LOG_PANIC(TAG, "Memory corruption detected");
+		POST_ERROR(Err_Handler::EH_MCD);
 	}
 
 	/* Zero out the object */

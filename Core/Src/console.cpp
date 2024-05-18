@@ -9,6 +9,7 @@
 #include "util.h"
 #include "console.h"
 #include "logging.h"
+#include "err_handler.h"
 #include "uart.h"
 #include "xps_logical.h"
 #include "tone_plant.h"

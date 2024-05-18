@@ -1,7 +1,8 @@
 
 #include <math.h>
-#include <mf_receiver.h>
+#include "mf_receiver.h"
 #include "logging.h"
+#include "err_handler.h"
 #include "util.h"
 
 
@@ -92,7 +93,7 @@ void MF_Decoder::receiver_worker(void *args) {
 		/* Wait for work */
 		status = osMessageQueueGet(this->_message_queue, &qd, NULL, osWaitForever);
 		if(status != osOK) {
-			LOG_PANIC(TAG, "Message queue status returned %d", status);
+			POST_ERROR(Err_Handler::EH_MQGE);
 		}
 
 		/* UPDATE_SCOPE_TEST_POINT(SCOPE_TP2, (bool) qd.buffer_number); */
@@ -360,7 +361,7 @@ void MF_Decoder::_start_dma_transfers(uint32_t receiver_descriptor) {
 		HAL_ADC_Start_DMA(&hadc2, (uint32_t *) this->_mf_data[receiver_descriptor].mf_dma_buffer, MF_ADC_BUF_LEN);
 	}
 	else {
-		LOG_PANIC(TAG, "Invalid descriptor passed in: %d", receiver_descriptor);
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 }
@@ -378,7 +379,7 @@ void MF_Decoder::_stop_dma_transfers(uint32_t receiver_descriptor) {
 		HAL_ADC_Stop_DMA(&hadc2);
 	}
 	else {
-		LOG_PANIC(TAG, "Invalid descriptor passed in: %d", receiver_descriptor);
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 }
 
@@ -429,7 +430,7 @@ void MF_Decoder::init() {
 
 	this->_message_queue = osMessageQueueNew(NUM_MSG_QUEUE_OBJECTS, sizeof(queueData), NULL);
 	if (this->_message_queue == NULL) {
-		LOG_PANIC(TAG, "Could not create message queue");
+		POST_ERROR(Err_Handler::EH_MQCF);
 	  }
 
 	/* Create mutex to protect mf receiver data between tasks */
@@ -437,17 +438,17 @@ void MF_Decoder::init() {
 
 	this->_lock = osMutexNew(&mfd_mutex_attr);
 	if (this->_lock == NULL) {
-			LOG_PANIC(TAG, "Could not create lock");
+			POST_ERROR(Err_Handler::EH_LCE);
 		  }
 
 	/* Initialize DMA timer for MF decoders */
 	if ((status = HAL_TIM_OC_Start(&htim4, TIM_CHANNEL_1) != HAL_OK)) {
-		LOG_PANIC(TAG, "Could not start timer 4 channel 1, RTOS status: ", status);
+		POST_ERROR(Err_Handler::EH_NOTS);
 	}
 
 	/* Create worker task */
 	if(osThreadNew(_worker, NULL, &worker_attr) == NULL) {
-		LOG_PANIC(TAG, "Could not start worker thread");
+		POST_ERROR(Err_Handler::EH_TSF);
 	}
 
 }
@@ -464,7 +465,7 @@ int32_t MF_Decoder::seize(Mf_Callback callback, void *parameter, int channel, bo
 
 
 	if(!callback) {
-		LOG_PANIC(TAG, "NULL passed in for callback");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	/* Get the lock */
@@ -492,7 +493,7 @@ int32_t MF_Decoder::seize(Mf_Callback callback, void *parameter, int channel, bo
 		}
 	}
 	else {
-		LOG_PANIC(TAG, "Invalid MF receiver channel");
+		POST_ERROR(Err_Handler::EH_IVR);
 	}
 
 	if(descriptor >= NUM_MF_RECEIVERS) {
@@ -531,7 +532,7 @@ void MF_Decoder::release(int32_t descriptor) {
 
 
 	if((descriptor >= NUM_MF_RECEIVERS) || (descriptor < 0)) {
-		LOG_PANIC(TAG, "Invalid descriptor passed in");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 	/* Get the lock */
@@ -547,7 +548,7 @@ void MF_Decoder::release(int32_t descriptor) {
 
 	}
 	else {
-		LOG_PANIC(TAG, "Attempt made to free MF receiver already available");
+		POST_ERROR(Err_Handler::EH_FRAA);
 	}
 
 	/* Release the lock */

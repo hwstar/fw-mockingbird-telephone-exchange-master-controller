@@ -1,6 +1,7 @@
 #include "top.h"
 #include "util.h"
 #include "logging.h"
+#include "err_handler.h"
 #include "card_comm.h"
 #include "mf_receiver.h"
 #include "drv_dtmf.h"
@@ -30,7 +31,7 @@ void Trunk::_mf_receiver_callback(void *parameter, uint8_t error_code, uint8_t d
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 
 	if(!parameter) {
-		LOG_PANIC(TAG, "NULL Pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	Connector::Conn_Info *tinfo = (Connector::Conn_Info *) parameter;
 
@@ -79,7 +80,7 @@ static void __mf_sending_complete(uint32_t descriptor, void *data) {
 void Trunk::_mf_sending_complete(uint32_t descriptor, void *data) {
 	Connector::Conn_Info *tinfo = (Connector::Conn_Info *) data;
 	if(!tinfo) {
-		LOG_PANIC(TAG, "NULL pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 
@@ -102,7 +103,7 @@ void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
 
 
 	if(resource  >= MAX_TRUNK_CARDS) {
-		LOG_PANIC(TAG, "Invalid trunk number");
+		POST_ERROR(Err_Handler::EH_ITN);
 	}
 
 	/* LOG_DEBUG(TAG, "Received event from physical trunk %u. Type: %u",resource, event_type); */
@@ -189,10 +190,10 @@ void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
 uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t phys_line_trunk_number, uint32_t message, void *data) {
 
 	if(!conn_info) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	if(phys_line_trunk_number >= MAX_TRUNK_CARDS) {
-		LOG_PANIC(TAG, "Bad parameter value");
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 
 	/* Point to the connection info for the physical line number */
@@ -278,7 +279,7 @@ void Trunk::init(void) {
 	/* Create the lock mutex */
 	this->_lock = osMutexNew(&trunk_mutex_attr);
 	if (this->_lock == NULL) {
-		LOG_PANIC(TAG, "Could not create lock");
+		POST_ERROR(Err_Handler::EH_LCE);
 	}
 
 	for(uint8_t index = 0; index < MAX_TRUNK_CARDS; index++) {
@@ -309,7 +310,7 @@ void Trunk::init(void) {
 
 bool Trunk::_test_pending_state(Connector::Conn_Info *tinfo) {
 	if(!tinfo) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	if(tinfo->pending_state) {
 			tinfo->state = tinfo->pending_state;
@@ -398,13 +399,13 @@ void Trunk::poll(void) {
 				break;
 
 			default:
-				LOG_PANIC(TAG, "Invalid result");
+				POST_ERROR(Err_Handler::EH_INVR);
 				break;
 			}
 			break;
 
 		default:
-			LOG_PANIC(TAG, "Invalid result");
+			POST_ERROR(Err_Handler::EH_INVR);
 			break;
 		}
 		break;

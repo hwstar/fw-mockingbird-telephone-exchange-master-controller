@@ -1,5 +1,6 @@
 #include "top.h"
 #include "logging.h"
+#include "err_handler.h"
 #include "util.h"
 #include "mf_receiver.h"
 #include "drv_dtmf.h"
@@ -27,8 +28,7 @@ bool XPS_Logical::_validate_descriptor(uint32_t descriptor) {
 
 uint8_t XPS_Logical::get_mf_receiver_x(int32_t mf_descriptor) {
 	if((mf_descriptor < 0) || (mf_descriptor >= MF_Decoder::NUM_MF_RECEIVERS)) {
-		LOG_PANIC(TAG, "Invalid descriptor");
-
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 	uint8_t x = mf_descriptor * 2;
 
@@ -44,8 +44,7 @@ uint8_t XPS_Logical::get_mf_receiver_x(int32_t mf_descriptor) {
 
 uint8_t XPS_Logical::get_dtmf_receiver_x(int32_t dtmf_descriptor) {
 	if((dtmf_descriptor < 0) || (dtmf_descriptor >= Dtmf::NUM_DTMF_RECEIVERS)) {
-		LOG_PANIC(TAG, "Invalid descriptor");
-
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 	uint8_t x = dtmf_descriptor * 2;
 
@@ -60,8 +59,7 @@ uint8_t XPS_Logical::get_dtmf_receiver_x(int32_t dtmf_descriptor) {
 
 uint8_t XPS_Logical::get_tone_plant_x(int32_t tone_plant_descriptor) {
 	if((tone_plant_descriptor < 0) || (tone_plant_descriptor >= Dtmf::NUM_DTMF_RECEIVERS)) {
-		LOG_PANIC(TAG, "Invalid descriptor");
-
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 	uint8_t x = tone_plant_descriptor * 2;
 
@@ -76,7 +74,7 @@ uint8_t XPS_Logical::get_tone_plant_x(int32_t tone_plant_descriptor) {
 
 uint8_t XPS_Logical::get_sub_line_x(uint8_t line_number) {
 	if(line_number >= MAX_SUB_LINES) {
-		LOG_PANIC(TAG, "Invalid line number");
+		POST_ERROR(Err_Handler::EH_IPLN);
 	}
 	return (line_number * 2) + LINE_COLUMN_START;
 }
@@ -87,7 +85,7 @@ uint8_t XPS_Logical::get_sub_line_x(uint8_t line_number) {
 
 uint8_t XPS_Logical::get_trunk_x(uint8_t trunk_number) {
 	if(trunk_number >= MAX_TRUNKS) {
-		LOG_PANIC(TAG, "Invalid trunk number");
+		POST_ERROR(Err_Handler::EH_ITN);
 	}
 	return (trunk_number * 2) + TRUNK_COLUMN_START;
 }
@@ -98,7 +96,7 @@ uint8_t XPS_Logical::get_trunk_x(uint8_t trunk_number) {
 
 uint8_t XPS_Logical::get_path_y(uint8_t junctor_number, bool orig_term) {
 	if(junctor_number > MAX_JUNCTORS) {
-		LOG_PANIC(TAG, "Invalid Junctor Number");
+		POST_ERROR(Err_Handler::EH_IJN);
 	}
 
 	uint8_t y = junctor_number * 2;
@@ -117,11 +115,12 @@ uint8_t XPS_Logical::get_path_y(uint8_t junctor_number, bool orig_term) {
 
 void XPS_Logical::_logical_to_physical(Phys_Switch *s, uint32_t x, uint32_t y) {
 	if(!s) {
-		LOG_PANIC(TAG, "NULL passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
+
 	}
 
 	if((x > LOGICAL_NUM_X) || (y > LOGICAL_NUM_Y)) {
-		LOG_PANIC(TAG, "Invalid logical X or Y values");
+		POST_ERROR(Err_Handler::EH_IVXY);
 	}
 
 	s->chip = x / PHYSICAL_NUM_X;
@@ -183,7 +182,7 @@ void XPS_Logical::open_switch(uint32_t x, uint32_t y) {
 
 bool XPS_Logical::get_switch_state(uint32_t x, uint32_t y) {
 	if((x > LOGICAL_MAX_X) || y > LOGICAL_MAX_Y) {
-		LOG_PANIC(TAG, "X or Y out of range");
+		POST_ERROR(Err_Handler::EH_IVXY);
 	}
 
 	uint16_t byte_addr = (x >> 3)+(y << 2);
@@ -246,7 +245,7 @@ void XPS_Logical::init(void) {
 	/* Create the lock mutex */
 	this->_lock = osMutexNew(&xps_logical_mutex_attr);
 	if (this->_lock == NULL) {
-		LOG_PANIC(TAG, "Could not create lock");
+		POST_ERROR(Err_Handler::EH_LCE);
 	}
 }
 
@@ -311,7 +310,7 @@ bool XPS_Logical::seize(Junctor_Info *info, int32_t requested_junctor_number) {
 
 void XPS_Logical::release(Junctor_Info *info) {
 	if(!info){
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	/* Open all closed switches */
@@ -339,7 +338,7 @@ void XPS_Logical::connect_phone_orig(Junctor_Info *info, int32_t phone_line_num_
 
 
 	if(!info) {
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	if((info->connections.orig_send.resource == RSRC_NONE) && (info->connections.orig_recv.resource == RSRC_NONE)) {
@@ -357,7 +356,7 @@ void XPS_Logical::connect_phone_orig(Junctor_Info *info, int32_t phone_line_num_
 		this->close_switch(info->connections.orig_send.x, info->connections.orig_send.y);
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 }
 
@@ -367,7 +366,7 @@ void XPS_Logical::connect_phone_orig(Junctor_Info *info, int32_t phone_line_num_
 
 void XPS_Logical::disconnect_phone_orig(Junctor_Info *info) {
 	if(!info) {
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	if((info->connections.orig_recv.resource == RSRC_LINE) && (info->connections.orig_send.resource == RSRC_LINE)) {
@@ -376,7 +375,7 @@ void XPS_Logical::disconnect_phone_orig(Junctor_Info *info) {
 		info->connections.orig_recv.resource = info->connections.orig_send.resource = RSRC_NONE;
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 }
 
@@ -388,7 +387,7 @@ void XPS_Logical::connect_phone_term(Junctor_Info *info, int32_t phone_line_num_
 
 
 	if(!info) {
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	if((info->connections.term_send.resource == RSRC_NONE) && (info->connections.term_send.resource == RSRC_NONE)) {
@@ -407,7 +406,7 @@ void XPS_Logical::connect_phone_term(Junctor_Info *info, int32_t phone_line_num_
 
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 
 
@@ -420,7 +419,7 @@ void XPS_Logical::connect_phone_term(Junctor_Info *info, int32_t phone_line_num_
 
 void XPS_Logical::disconnect_phone_term(Junctor_Info *info) {
 	if(!info) {
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	if((info->connections.term_recv.resource == RSRC_LINE) && (info->connections.term_send.resource == RSRC_LINE)) {
@@ -429,7 +428,7 @@ void XPS_Logical::disconnect_phone_term(Junctor_Info *info) {
 		info->connections.term_recv.resource = info->connections.term_send.resource = RSRC_NONE;
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 
 }
@@ -440,7 +439,7 @@ void XPS_Logical::disconnect_phone_term(Junctor_Info *info) {
 
 void XPS_Logical::connect_trunk_orig(Junctor_Info *info, int32_t trunk_num_orig) {
 	if(!info) {
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	if((info->connections.orig_send.resource == RSRC_NONE) && (info->connections.orig_recv.resource == RSRC_NONE)) {
@@ -458,7 +457,7 @@ void XPS_Logical::connect_trunk_orig(Junctor_Info *info, int32_t trunk_num_orig)
 		this->close_switch(info->connections.orig_send.x, info->connections.orig_send.y);
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 
 }
@@ -469,7 +468,7 @@ void XPS_Logical::connect_trunk_orig(Junctor_Info *info, int32_t trunk_num_orig)
 
 void XPS_Logical::disconnect_trunk_orig(Junctor_Info *info) {
 	if(!info) {
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	if((info->connections.orig_recv.resource == RSRC_TRUNK) && (info->connections.orig_send.resource == RSRC_TRUNK)) {
@@ -478,7 +477,7 @@ void XPS_Logical::disconnect_trunk_orig(Junctor_Info *info) {
 		info->connections.orig_recv.resource = info->connections.orig_send.resource = RSRC_NONE;
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 
 }
@@ -491,7 +490,7 @@ void XPS_Logical::connect_trunk_term(Junctor_Info *info, int32_t trunk_num_term)
 
 
 	if(!info) {
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	if((info->connections.term_send.resource == RSRC_NONE) && (info->connections.term_send.resource == RSRC_NONE)) {
@@ -510,7 +509,7 @@ void XPS_Logical::connect_trunk_term(Junctor_Info *info, int32_t trunk_num_term)
 
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 
 
@@ -522,7 +521,7 @@ void XPS_Logical::connect_trunk_term(Junctor_Info *info, int32_t trunk_num_term)
 
 void XPS_Logical::disconnect_trunk_term(Junctor_Info *info) {
 	if(!info) {
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	if((info->connections.term_recv.resource == RSRC_TRUNK) && (info->connections.term_send.resource == RSRC_TRUNK)) {
@@ -531,7 +530,7 @@ void XPS_Logical::disconnect_trunk_term(Junctor_Info *info) {
 		info->connections.term_recv.resource = info->connections.term_send.resource = RSRC_NONE;
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 
 }
@@ -542,10 +541,10 @@ void XPS_Logical::disconnect_trunk_term(Junctor_Info *info) {
 
 void XPS_Logical::connect_tone_plant_output(Junctor_Info *info, int32_t tone_plant_descriptor, bool orig_term) {
 	if(!info)  {
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	if(tone_plant_descriptor < 0) {
-		LOG_PANIC(TAG, "Bad Descriptor");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 	orig_term = !orig_term; /* Tone plant needs to be on the odd side of the junctor by default since it is a transmitter */
@@ -561,7 +560,7 @@ void XPS_Logical::connect_tone_plant_output(Junctor_Info *info, int32_t tone_pla
 
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 
 
@@ -575,7 +574,7 @@ void XPS_Logical::connect_tone_plant_output(Junctor_Info *info, int32_t tone_pla
 
 void XPS_Logical::disconnect_tone_plant_output(Junctor_Info *info) {
 	if(!info)  {
-			LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 		}
 
 	if(info->connections.tone_plant.resource == RSRC_TONE_PLANT) {
@@ -584,7 +583,7 @@ void XPS_Logical::disconnect_tone_plant_output(Junctor_Info *info) {
 
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection, unexpected resource: %u", info->connections.tone_plant.resource);
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 }
 
@@ -596,10 +595,10 @@ void XPS_Logical::disconnect_tone_plant_output(Junctor_Info *info) {
 void XPS_Logical::connect_dtmf_receiver(Junctor_Info *info, int32_t dtmf_receiver_descriptor, bool orig_term) {
 
 	if(!info)  {
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	if(dtmf_receiver_descriptor < 0) {
-		LOG_PANIC(TAG, "Bad Descriptor");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 	uint8_t x = this->get_dtmf_receiver_x(dtmf_receiver_descriptor);
@@ -613,7 +612,7 @@ void XPS_Logical::connect_dtmf_receiver(Junctor_Info *info, int32_t dtmf_receive
 
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 
 }
@@ -624,7 +623,7 @@ void XPS_Logical::connect_dtmf_receiver(Junctor_Info *info, int32_t dtmf_receive
 
 void XPS_Logical::disconnect_dtmf_receiver(Junctor_Info *info) {
 	if(!info)  {
-			LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 		}
 
 	if(info->connections.digit_receiver.resource == RSRC_DTMF_RCVR) {
@@ -633,7 +632,7 @@ void XPS_Logical::disconnect_dtmf_receiver(Junctor_Info *info) {
 
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 
 }
@@ -646,10 +645,10 @@ void XPS_Logical::disconnect_dtmf_receiver(Junctor_Info *info) {
 void XPS_Logical::connect_mf_receiver(Junctor_Info *info, int32_t mf_receiver_descriptor, bool orig_term) {
 
 	if(!info)  {
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	if(mf_receiver_descriptor < 0) {
-		LOG_PANIC(TAG, "Bad Descriptor");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 	uint8_t x = this->get_mf_receiver_x(mf_receiver_descriptor);
@@ -663,7 +662,7 @@ void XPS_Logical::connect_mf_receiver(Junctor_Info *info, int32_t mf_receiver_de
 
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 
 
@@ -675,7 +674,7 @@ void XPS_Logical::connect_mf_receiver(Junctor_Info *info, int32_t mf_receiver_de
 
 void XPS_Logical::disconnect_mf_receiver(Junctor_Info *info) {
 	if(!info)  {
-			LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 		}
 
 	if(info->connections.digit_receiver.resource == RSRC_MF_RCVR) {
@@ -684,7 +683,7 @@ void XPS_Logical::disconnect_mf_receiver(Junctor_Info *info) {
 
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		POST_ERROR(Err_Handler::EH_CNRC);
 	}
 
 
@@ -696,7 +695,7 @@ void XPS_Logical::disconnect_mf_receiver(Junctor_Info *info) {
 
 void XPS_Logical::disconnect_all(Junctor_Info *info) {
 	if(!info) {
-		LOG_PANIC(TAG, "NULL Junctor info pointer");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	if(info->connections.orig_recv.resource == RSRC_LINE) {
 		this->disconnect_phone_orig(info);

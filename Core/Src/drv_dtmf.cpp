@@ -2,6 +2,7 @@
 #include "util.h"
 #include "drv_dtmf.h"
 #include "logging.h"
+#include "err_handler.h"
 
 
 static const char *TAG = "dtmfdrv";
@@ -18,7 +19,7 @@ bool Dtmf::_read_stb(uint32_t receiver) {
 	bool res = true;
 
 	if(receiver >= NUM_DTMF_RECEIVERS) {
-			LOG_PANIC(TAG, "Invalid receiver");
+			POST_ERROR(Err_Handler::EH_IVR);
 	}
 	else {
 		switch(receiver) {
@@ -46,7 +47,7 @@ char Dtmf::_read_digit_code(uint32_t receiver) {
 
 
 	if(receiver >= NUM_DTMF_RECEIVERS) {
-				LOG_PANIC(TAG, "Invalid receiver");
+		POST_ERROR(Err_Handler::EH_IVR);
 	}
 
 	/* Drive DTMF_TOEx high */
@@ -108,8 +109,8 @@ void Dtmf::poll(void) {
 	osStatus status = osMutexAcquire(this->_lock, osWaitForever);
 
 	if(status != osOK) {
-			LOG_PANIC(TAG, "Lock acquisition failed, RTOS status %d", status);
-		}
+		POST_ERROR(Err_Handler::EH_LAF);
+	}
 
 
 	for(int receiver = 0; receiver < NUM_DTMF_RECEIVERS; receiver++) {
@@ -156,14 +157,14 @@ int32_t Dtmf::seize(Dtmf_Callback callback, uint32_t parameter, int32_t receiver
 
 	/* Validate receiver number */
 	if((receiver < -1) || (receiver >= NUM_DTMF_RECEIVERS)) {
-		LOG_PANIC(TAG, "Invalid receiver number");
+		POST_ERROR(Err_Handler::EH_IVR);
 	}
 
 	/* Get the lock */
 	osStatus status = osMutexAcquire(this->_lock, osWaitForever);
 
 	if(status != osOK) {
-		LOG_PANIC(TAG, "Lock acquisition failed, RTOS status %d", status);
+		POST_ERROR(Err_Handler::EH_LAF);
 	}
 
 	if(receiver == -1) {
@@ -207,13 +208,14 @@ void Dtmf::release(int32_t descriptor) {
 
 	/* Validate descriptor */
 	if((descriptor < 0) || (descriptor >= NUM_DTMF_RECEIVERS)) {
-		LOG_PANIC(TAG, "Invalid descriptor: %d", descriptor);
+		POST_ERROR(Err_Handler::EH_IVD);
+
 	}
 	/* Get the lock */
 
 	osStatus status = osMutexAcquire(this->_lock, osWaitForever);
 	if(status != osOK) {
-		LOG_PANIC(TAG, "Lock acquisition failed, RTOS status %d", status);
+		POST_ERROR(Err_Handler::EH_LAF);
 	}
 
 	/* Free DTMF receiver */

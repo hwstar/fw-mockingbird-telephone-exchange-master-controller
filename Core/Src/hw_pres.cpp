@@ -1,4 +1,6 @@
 #include "top.h"
+#include "logging.h"
+#include "err_handler.h"
 #include "hw_pres.h"
 #include "i2c_engine.h"
 

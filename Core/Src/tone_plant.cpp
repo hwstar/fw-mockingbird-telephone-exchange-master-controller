@@ -2,8 +2,9 @@
 #include "util.h"
 #include "tone_plant.h"
 #include "logging.h"
+#include "err_handler.h"
 #include <math.h>
-#include <mf_receiver.h>
+#include "mf_receiver.h"
 
 static const char *TAG = "toneplant";
 
@@ -22,7 +23,7 @@ static uint8_t audio_samples_buffer_pool[AUDIO_SAMPLE_BUFFER_POOL_SIZE] __attrib
 
 void Tone_Plant::_enable_dma(uint32_t sai_channel) {
 	if(sai_channel >= NUM_SAI_CHANNELS) {
-		LOG_PANIC(TAG, "Invalid SAI channel number");
+		POST_ERROR(Err_Handler::EH_ISAI);
 	}
 	if(sai_channel == 1) {
 		HAL_SAI_Transmit_DMA(&hsai_BlockB1, (uint8_t *) this->_sai_data[1].dma_buffer, BUFFER_SIZE);
@@ -40,7 +41,7 @@ void Tone_Plant::_enable_dma(uint32_t sai_channel) {
 
 void Tone_Plant::_disable_dma(uint32_t sai_channel) {
 	if(sai_channel >= 2) {
-		LOG_PANIC(TAG, "Invalid SAI channel number");
+		POST_ERROR(Err_Handler::EH_ISAI);
 	}
 
 	if(sai_channel == 1) {
@@ -59,7 +60,7 @@ void Tone_Plant::_disable_dma(uint32_t sai_channel) {
 
 void Tone_Plant::_disable_tx_mute(uint32_t sai_channel) {
 	if(sai_channel >= NUM_SAI_CHANNELS) {
-		LOG_PANIC(TAG, "Invalid SAI channel number");
+		POST_ERROR(Err_Handler::EH_ISAI);
 	}
 	if(sai_channel == 1) {
 		HAL_SAI_DisableTxMuteMode(&hsai_BlockB1);
@@ -257,7 +258,7 @@ bool Tone_Plant::_convert_digit_string(channelInfo *ch_info, const char *digits,
 	uint8_t i, code;
 
 	if(!ch_info || !digits) {
-		LOG_PANIC(TAG, "Null argument(s) passed");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	ch_info->digit_string_index = 0;
@@ -351,7 +352,7 @@ void Tone_Plant::worker(void) {
 
 		status = osMessageQueueGet(this->_message_queue, &qd, NULL, osWaitForever);
 		if(status != osOK) {
-			LOG_PANIC(TAG, "Message queue status returned %d", status);
+			POST_ERROR(Err_Handler::EH_MQGE);
 		}
 
 		UPDATE_SCOPE_TEST_POINT(SCOPE_TP1, true);
@@ -770,7 +771,7 @@ void Tone_Plant::init(void) {
 
 	this->_message_queue = osMessageQueueNew(NUM_MSG_QUEUE_OBJECTS, sizeof(queueData), NULL);
 	if (this->_message_queue == NULL) {
-		LOG_PANIC(TAG, "Could not create message queue");
+		POST_ERROR(Err_Handler::EH_MQCF);
 	  }
 
 	/* Create mutex to protect tone plant data between tasks */
@@ -778,12 +779,12 @@ void Tone_Plant::init(void) {
 
 	this->_lock = osMutexNew(&tp_mutex_attr);
 	if (this->_lock == NULL) {
-			LOG_PANIC(TAG, "Could not create lock");
+			POST_ERROR(Err_Handler::EH_LCE);
 		  }
 
 	/* Create worker task */
 	if(osThreadNew(_worker, NULL, &worker_attr) == NULL) {
-		LOG_PANIC(TAG, "Could not start worker thread");
+		POST_ERROR(Err_Handler::EH_TSF);
 	}
 
 	/* Unmute TX audio channels */
@@ -804,10 +805,10 @@ void Tone_Plant::init(void) {
 void Tone_Plant::send_call_progress_tones(uint32_t descriptor, uint8_t type) {
 
 	if(type >= CPT_MAX){
-		LOG_PANIC(TAG, "Invalid call progress type");
+		POST_ERROR(Err_Handler::EH_ICPT);
 	}
 	if(!this->_validate_descriptor(descriptor)) {
-		LOG_PANIC(TAG, "Invalid descriptor");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 	/* LOG_DEBUG(TAG, "send call progress tones: descriptor: %u, type: %u", descriptor, type); */
@@ -845,11 +846,11 @@ void Tone_Plant::send_call_progress_tones(uint32_t descriptor, uint8_t type) {
 void Tone_Plant::send_mf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number, void *data), void *data) {
 
 	if(!this->_validate_descriptor(descriptor)) {
-		LOG_PANIC(TAG, "Invalid descriptor");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 	if((!digit_string) || (!callback)) {
-		LOG_PANIC(TAG, "Invalid parameters");
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
@@ -916,11 +917,11 @@ void Tone_Plant::send_mf(int32_t descriptor, const char *digit_string, void (*ca
  */
 void Tone_Plant::send_dtmf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number, void *data), void *data) {
 	if(!this->_validate_descriptor(descriptor)) {
-		LOG_PANIC(TAG, "Invalid descriptor");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 	if((!digit_string) || (!callback)) {
-		LOG_PANIC(TAG, "Invalid parameters");
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 
 
@@ -988,12 +989,11 @@ void Tone_Plant::send_dtmf(int32_t descriptor, const char *digit_string, void (*
 
 void Tone_Plant::send_single_tone(uint32_t descriptor, float freq, float level) {
 	if(!this->_validate_descriptor(descriptor)) {
-			LOG_PANIC(TAG, "Invalid descriptor");
-		}
+		POST_ERROR(Err_Handler::EH_IVD);
+	}
 
 	if(freq < 0.0 || freq > 3400.0 || level < -40.0 || level > 0.0) {
-		LOG_PANIC(TAG, "Invalid parameter");
-
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
@@ -1017,11 +1017,11 @@ void Tone_Plant::send(int32_t descriptor, const int16_t *samples,
 	uint32_t length, void (*callback)(uint32_t channel_number, void *data), void *data, float level) {
 
 	if (!this->_validate_descriptor(descriptor)) {
-		LOG_PANIC(TAG, "Invalid descriptor");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 	if ((!samples) || (!callback)) {
-		LOG_PANIC(TAG, "Invalid parameters");
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
@@ -1048,11 +1048,11 @@ void Tone_Plant::send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t 
 	void (*callback)(uint32_t channel_number, void *data), void *data, float level) {
 
 	if (!this->_validate_descriptor(descriptor)) {
-		LOG_PANIC(TAG, "Invalid descriptor");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 	if ((!samples) || (!callback)) {
-		LOG_PANIC(TAG, "Invalid parameters");
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
@@ -1102,11 +1102,11 @@ bool Tone_Plant::send_buffer_ulaw(int32_t descriptor,
 void Tone_Plant::send_loop(int32_t descriptor, const int16_t *samples, uint32_t length, float level) {
 
 	if (!this->_validate_descriptor(descriptor)) {
-		LOG_PANIC(TAG, "Invalid descriptor");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 	if (!samples) {
-		LOG_PANIC(TAG, "Invalid parameters");
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 
 
@@ -1131,11 +1131,11 @@ void Tone_Plant::send_loop(int32_t descriptor, const int16_t *samples, uint32_t 
 void Tone_Plant::send_loop_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t length, float level) {
 
 	if (!this->_validate_descriptor(descriptor)) {
-		LOG_PANIC(TAG, "Invalid descriptor");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 	if (!samples) {
-		LOG_PANIC(TAG, "Invalid parameters");
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 
 
@@ -1180,7 +1180,7 @@ bool Tone_Plant::send_buffer_loop_ulaw(int32_t descriptor, const char *buffer_na
 
 void Tone_Plant::stop(int32_t descriptor) {
 	if(!this->_validate_descriptor(descriptor)) {
-		LOG_PANIC(TAG, "Invalid descriptor");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 	/* LOG_DEBUG(TAG, "stop: descriptor: %u", descriptor); */
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
@@ -1243,7 +1243,7 @@ int32_t Tone_Plant::channel_seize(int32_t requested_channel) {
 void Tone_Plant::channel_release(int32_t descriptor) {
 
 	if(!this->_validate_descriptor(descriptor)){
-		LOG_PANIC(TAG, "Invalid descriptor");
+		POST_ERROR(Err_Handler::EH_IVD);
 	}
 
 	/* LOG_DEBUG(TAG, "channel release descriptor: %u", descriptor); */

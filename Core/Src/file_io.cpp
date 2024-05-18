@@ -1,6 +1,7 @@
 #include "top.h"
 #include "file_io.h"
 #include "logging.h"
+#include "err_handler.h"
 
 namespace File_Io {
 
@@ -121,14 +122,14 @@ void File_Io::init(void) {
 
 	this->_lock = osMutexNew(&fileio_mutex_attr);
 	if (this->_lock == NULL) {
-			LOG_PANIC(TAG, "Could not create lock");
+			POST_ERROR(Err_Handler::EH_LCE);
 		  }
 
 	/* Physically mount the volume */
 
 	fres = f_mount(&this->_fs, "", 1);
 	if(fres != FR_OK) {
-		LOG_PANIC(TAG, "SD Card not present, insert SD Card and reboot");
+		POST_ERROR(Err_Handler::EH_NOSD);
 	}
 
 }

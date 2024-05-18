@@ -2,6 +2,7 @@
 #include "drv_xps.h"
 #include "util.h"
 #include "logging.h"
+#include "err_handler.h"
 
 static const char *TAG = "drvxps";
 
@@ -24,8 +25,7 @@ void Xps::_set_cs_state(uint32_t cs_number, bool state) {
 		break;
 
 	default:
-		LOG_PANIC(TAG, "Invalid CS number: %d", cs_number);
-
+		POST_ERROR(Err_Handler::EH_ICSN);
 	}
 
 }
@@ -55,13 +55,13 @@ void Xps::clear(void) {
 void Xps::modify(uint32_t x, uint32_t y, uint32_t cs_number, bool state) {
 	/* Check inputs */
 	if((x >= MAX_ROWS) || (y >= MAX_COLUMNS)) {
-		LOG_PANIC(TAG, "Invalid x or y inputs");
+		POST_ERROR(Err_Handler::EH_IVXY);
 	}
 	/* Get the lock */
 
 	osStatus status = osMutexAcquire(this->_lock, 20U);
 	if(status != osOK) {
-		LOG_PANIC(TAG, "Lock acquisition failed, RTOS status %d", status);
+		POST_ERROR(Err_Handler::EH_LAF);
 	}
 
 	x = x_map[x];

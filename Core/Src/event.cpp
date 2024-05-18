@@ -1,6 +1,7 @@
 #include "top.h"
 #include "event.h"
 #include "logging.h"
+#include "err_handler.h"
 #include "drv_atten.h"
 #include "drv_dtmf.h"
 #include "card_comm.h"
@@ -56,12 +57,12 @@ void Event::init(void) {
 	/* Create mutex to protect event data between tasks */
 	this->_lock = osMutexNew(&event_mutex_attr);
 	if (this->_lock == NULL) {
-		LOG_PANIC(TAG, "Could not create lock");
+		POST_ERROR(Err_Handler::EH_LCE);
 	}
 
 	/* Create worker task */
 	if(osThreadNew(_worker, NULL, &worker_attr) == NULL) {
-		LOG_PANIC(TAG, "Could not start worker thread");
+		POST_ERROR(Err_Handler::EH_TSF);
 	}
 
 

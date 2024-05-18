@@ -1,6 +1,7 @@
 #include <string.h>
 #include "top.h"
 #include "logging.h"
+#include "err_handler.h"
 #include "util.h"
 #include "pool_alloc.h"
 #include "xps_logical.h"
@@ -146,10 +147,10 @@ bool Connector::add_route(uint32_t table_number, uint32_t dest_equip_type, uint3
 		uint32_t trunk_addressing_start, uint32_t trunk_addressing_end, const uint8_t *dest_phys_lines_trunks, const char *match_string ) {
 
 	if(table_number >= MAX_ROUTE_TABLES) {
-		LOG_PANIC(TAG, "Bad parameter");
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 	if((dest_phys_lines_trunks == NULL)||(match_string == NULL)) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	Route_Table_Node *rtn_new = (Route_Table_Node *) this->_routing_pool.allocate_object();
@@ -196,7 +197,7 @@ bool Connector::add_route(uint32_t table_number, uint32_t dest_equip_type, uint3
 
 void Connector::prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32_t source_phys_line_number) {
 	if(!conn_info) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	/* Reset digit buffer and digit counts */
@@ -226,7 +227,7 @@ uint32_t Connector::test(Conn_Info *conn_info, const char *digits_received) {
 	uint32_t res = ROUTE_INDETERMINATE;
 
 	if((conn_info == NULL) || (digits_received == NULL)) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	Route_Info *ri = &conn_info->route_info;
 
@@ -276,7 +277,7 @@ uint32_t Connector::test(Conn_Info *conn_info, const char *digits_received) {
 uint32_t Connector::resolve(Conn_Info *conn_info) {
 
 	if(!conn_info) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	Route_Info *ri = &conn_info->route_info;
@@ -292,13 +293,15 @@ uint32_t Connector::resolve(Conn_Info *conn_info) {
 	memcpy(conn_info->route_info.dest_phys_lines_trunks,
 			conn_info->route_info.route_table_node->phys_lines_trunks,
 			MAX_PHYS_LINE_TRUNK_TABLE);
-	/* Send a seize message */
+
 	conn_info->trunk_index = 0; /* Select the first trunk */
+	/* Try to seize it */
 	uint32_t pm_res = this->send_peer_message(
 			conn_info,
 			conn_info->route_info.dest_equip_type,
 			conn_info->route_info.dest_phys_lines_trunks[conn_info->trunk_index],
 			PM_SEIZE);
+	/* Set the result for the caller */
 	switch(pm_res) {
 	case PMR_OK:
 		res = ROUTE_DEST_CONNECTED;
@@ -313,7 +316,7 @@ uint32_t Connector::resolve(Conn_Info *conn_info) {
 		break;
 
 	default:
-		LOG_PANIC(TAG, "Bad return value");
+		POST_ERROR(Err_Handler::EH_BRV);
 		break;
 	}
 
@@ -329,14 +332,18 @@ uint32_t Connector::resolve(Conn_Info *conn_info) {
 uint32_t Connector::resolve_try_next_trunk(Conn_Info *conn_info) {
 	uint32_t res = ROUTE_DEST_CONNECTED;
 
+	if(!conn_info) {
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
+
 	Route_Info *ri = &conn_info->route_info;
 
 	if(ri->dest_equip_type != ET_TRUNK) {
 		/* Cannot be called unless destination is a trunk */
-		LOG_PANIC(TAG,"Equipment type must be ET_TRUNK");
-	}
+		POST_ERROR(Err_Handler::EH_ETNT);
+	};
 	if((ri->state == ROUTE_INVALID) || (ri->state == ROUTE_INDETERMINATE)) {
-		LOG_PANIC(TAG,"Invalid route state");
+		POST_ERROR(Err_Handler::EH_IRS);
 	}
 
 	/* See if there's another trunk available in the list */
@@ -363,13 +370,13 @@ uint32_t Connector::resolve_try_next_trunk(Conn_Info *conn_info) {
 			break;
 
 		default:
-			LOG_PANIC(TAG, "Bad return value");
+			POST_ERROR(Err_Handler::EH_BRV);
 			break;
 		}
 
 	}
 
-
+	/* Remember the route state if called later */
 	ri->state = res;
 	return res;
 
@@ -380,8 +387,6 @@ uint32_t Connector::resolve_try_next_trunk(Conn_Info *conn_info) {
  * Send message to called destination
  * For use by lines and trunks only in the event process.
  * Does not respect locking
- * The first signature extracts the destination to be messaged from the peer connection info
- * The second signature allows permits messages to be sent to an arbitrary destination
  */
 
 uint32_t Connector::send_message_to_dest(Conn_Info *conn_info, uint32_t message) {
@@ -402,7 +407,7 @@ uint32_t Connector::send_message_to_dest(Conn_Info *conn_info, uint32_t message)
 
 uint32_t Connector::send_peer_message(Conn_Info *conn_info, uint32_t message) {
 	if((!conn_info) || (!conn_info->peer)) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	uint32_t equip_type = Conn.get_caller_equip_type(conn_info->peer);
 	uint32_t phys_line_trunk_number = Conn.get_caller_phys_line_trunk(conn_info->peer);
@@ -413,7 +418,7 @@ uint32_t Connector::send_peer_message(Conn_Info *conn_info, uint32_t dest_equip_
 		uint32_t dest_phys_line_trunk_number, uint32_t message) {
 
 	if(!conn_info) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	uint32_t pm_res;
@@ -421,20 +426,20 @@ uint32_t Connector::send_peer_message(Conn_Info *conn_info, uint32_t dest_equip_
 	switch(dest_equip_type) {
 	case ET_LINE:
 		if(dest_phys_line_trunk_number >= Sub_Line::MAX_DUAL_LINE_CARDS * 2) {
-			LOG_PANIC(TAG, "Bad parameter value");
+			POST_ERROR(Err_Handler::EH_INVP);
 		}
 		pm_res = Sub_line.peer_message_handler(conn_info, dest_phys_line_trunk_number, message);
 		break;
 
 	case ET_TRUNK:
 		if(dest_phys_line_trunk_number >= Trunk::MAX_TRUNK_CARDS) {
-			LOG_PANIC(TAG, "Bad parameter value");
+			POST_ERROR(Err_Handler::EH_INVP);
 		}
 		pm_res = Trunks.peer_message_handler(conn_info, dest_phys_line_trunk_number, message);
 		break;
 
 	default:
-		LOG_PANIC(TAG, "Invalid equipment type");
+		POST_ERROR(Err_Handler::EH_IET);
 		break;
 	}
 
@@ -447,7 +452,7 @@ uint32_t Connector::send_peer_message(Conn_Info *conn_info, uint32_t dest_equip_
  */
 uint32_t Connector::get_caller_equip_type(Conn_Info *conn_info) {
 	if(!conn_info) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	return conn_info->route_info.source_equip_type;
 
@@ -459,7 +464,7 @@ uint32_t Connector::get_caller_equip_type(Conn_Info *conn_info) {
 
 uint32_t Connector::get_called_equip_type(Conn_Info *conn_info) {
 	if(!conn_info) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	return conn_info->route_info.dest_equip_type;
 
@@ -471,7 +476,7 @@ uint32_t Connector::get_called_equip_type(Conn_Info *conn_info) {
 
 uint32_t Connector::get_caller_phys_line_trunk(Conn_Info *conn_info) {
 	if(!conn_info) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	return conn_info->route_info.source_phys_line_number;
 }
@@ -483,7 +488,7 @@ uint32_t Connector::get_caller_phys_line_trunk(Conn_Info *conn_info) {
 
 uint32_t Connector::get_called_phys_line_trunk(Conn_Info *conn_info) {
 	if(!conn_info) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	/* Todo: does not support multiple trunks */
 	return conn_info->route_info.dest_phys_lines_trunks[0];
@@ -496,8 +501,8 @@ uint32_t Connector::get_called_phys_line_trunk(Conn_Info *conn_info) {
 
 void Connector::connect_called_party_audio(Conn_Info *linfo) {
 	if(!linfo) {
-			LOG_PANIC(TAG, "Null pointer passed in");
-		}
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
 
 	uint32_t called_party_equip_type = Conn.get_called_equip_type(linfo);
 	uint32_t called_party_phys_line_trunk = Conn.get_called_phys_line_trunk(linfo);
@@ -518,8 +523,8 @@ void Connector::connect_called_party_audio(Conn_Info *linfo) {
 
 void Connector::disconnect_called_party_audio(Conn_Info *linfo) {
 	if(!linfo) {
-			LOG_PANIC(TAG, "Null pointer passed in");
-		}
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
 
 	uint32_t called_party_equip_type = Conn.get_called_equip_type(linfo);
 
@@ -539,8 +544,8 @@ void Connector::disconnect_called_party_audio(Conn_Info *linfo) {
 
 void Connector::connect_caller_party_audio(Conn_Info *linfo) {
 	if(!linfo) {
-			LOG_PANIC(TAG, "Null pointer passed in");
-		}
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
 
 	uint32_t caller_party_equip_type = Conn.get_caller_equip_type(linfo);
 	uint32_t caller_party_phys_line_trunk = Conn.get_caller_phys_line_trunk(linfo);
@@ -561,8 +566,8 @@ void Connector::connect_caller_party_audio(Conn_Info *linfo) {
 
 void Connector::disconnect_caller_party_audio(Conn_Info *linfo) {
 	if(!linfo) {
-			LOG_PANIC(TAG, "Null pointer passed in");
-		}
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
 
 	uint32_t caller_party_equip_type = Conn.get_caller_equip_type(linfo);
 
@@ -581,7 +586,7 @@ void Connector::disconnect_caller_party_audio(Conn_Info *linfo) {
 
 void Connector::release_mf_receiver(Conn_Info *linfo) {
 	if(!linfo) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	if(linfo->mf_receiver_descriptor != -1) {
 		Xps_logical.disconnect_mf_receiver(&linfo->jinfo);
@@ -600,7 +605,7 @@ void Connector::release_mf_receiver(Conn_Info *linfo) {
 
 void Connector::release_dtmf_receiver(Conn_Info *linfo) {
 	if(!linfo) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	if(linfo->dtmf_receiver_descriptor != -1) {
 		Xps_logical.disconnect_dtmf_receiver(&linfo->jinfo);
@@ -617,7 +622,7 @@ void Connector::release_dtmf_receiver(Conn_Info *linfo) {
 
 void Connector::release_tone_generator(Conn_Info *info) {
 	if(!info) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	if(info->tone_plant_descriptor != -1) {
 		Tone_plant.stop(info->tone_plant_descriptor);
@@ -626,7 +631,7 @@ void Connector::release_tone_generator(Conn_Info *info) {
 			Xps_logical.disconnect_tone_plant_output(&info->jinfo);
 		}
 		else if(info->jinfo.connections.tone_plant.resource != XPS_Logical::RSRC_NONE) {
-			LOG_PANIC(TAG, "Invalid resource type");
+			POST_ERROR(Err_Handler::EH_IRT);
 		}
 		Tone_plant.channel_release(info->tone_plant_descriptor);
 		info->tone_plant_descriptor = -1;
@@ -649,7 +654,7 @@ bool Connector::seize_and_connect_tone_generator(Conn_Info *info, bool orig_term
 	 * release it here.
 	 */
 	if(!info) {
-		LOG_PANIC(TAG, "NULL pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
 	Conn.release_tone_generator(info);
@@ -707,7 +712,7 @@ void Connector::release_called_party(Conn_Info *info) {
 			break;
 
 		default:
-			LOG_PANIC(TAG, "Unknown equipment type: %u", equip_type);
+			POST_ERROR(Err_Handler::EH_UET);
 			break;
 		}
 		Conn.send_peer_message(info, equip_type, dest_phys_line_trunk_number, message);

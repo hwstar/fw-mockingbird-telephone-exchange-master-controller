@@ -1,6 +1,7 @@
 #include "top.h"
 #include "i2c_engine.h"
 #include "logging.h"
+#include "err_handler.h"
 
 I2C_Engine::I2C_Engine I2c;
 
@@ -83,7 +84,7 @@ void I2C_Engine::init(void) {
 
 	/* Create worker task */
 	if(osThreadNew(_worker, NULL, &worker_attr) == NULL) {
-		LOG_PANIC(TAG, "Could not start worker thread");
+		POST_ERROR(Err_Handler::EH_TSF);
 	}
 
 }
@@ -115,7 +116,7 @@ bool I2C_Engine::queue_transaction(uint32_t type, uint32_t bus, int32_t expander
 	/*  Sanity check parameters */
 	if((type >= I2CT_MAX_I2C_TYPES) || (device_address > 0x7F) || (expander_channel > 7) || (expander_channel < -1) ||
 			(bus >= NUM_I2C_BUSSES) || (data_length > MAX_I2C_REG_DATA) || (!register_data) ) {
-		LOG_PANIC(TAG, "Bad parameters passed in");
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 	trans.id = trans_id;
 	trans.type = type;

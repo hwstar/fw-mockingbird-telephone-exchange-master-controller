@@ -1,5 +1,6 @@
 #include "top.h"
 #include "logging.h"
+#include "err_handler.h"
 #include "util.h"
 #include "card_comm.h"
 #include "xps_logical.h"
@@ -172,10 +173,10 @@ void Sub_Line::event_handler(uint32_t event_type, uint32_t resource) {
 uint32_t Sub_Line::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t phys_line_trunk_number, uint32_t message) {
 
 	if(!conn_info) {
-		LOG_PANIC(TAG, "Null pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	if(phys_line_trunk_number >= MAX_DUAL_LINE_CARDS * 2) {
-		LOG_PANIC(TAG, "Bad parameter value");
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 
 	uint32_t res = Connector::PMR_OK;
@@ -282,7 +283,7 @@ void Sub_Line::init(void) {
 
 	this->_lock = osMutexNew(&lock_mutex_attr);
 	if (this->_lock == NULL) {
-			LOG_PANIC(TAG, "Could not create lock");
+		POST_ERROR(Err_Handler::EH_LCE);
 		  }
 	/* Create event flags */
 	this->_event_flags = osEventFlagsNew(&event_flags_attributes);
@@ -297,7 +298,7 @@ void Sub_Line::init(void) {
 		/* Digit dialing timer */
 		linfo->dial_timer = osTimerNew(__dial_timer_callback, osTimerOnce, linfo, NULL);
 		if(linfo->dial_timer == NULL) {
-			LOG_PANIC(TAG, "Could not create timer");
+			POST_ERROR(Err_Handler::EH_TCE);
 		}
 
 		/* Variables */
@@ -441,7 +442,7 @@ void Sub_Line::poll(void) {
 				break;
 
 			default:
-				LOG_PANIC(TAG, "Unhandled case");
+				POST_ERROR(Err_Handler::EH_UHC);
 				break;
 			}
 		}
@@ -743,7 +744,7 @@ void Sub_Line::poll(void) {
 void Sub_Line::set_power_state(uint32_t line, bool state) {
 
 	if(line >= (MAX_DUAL_LINE_CARDS * 2)) {
-		LOG_PANIC(TAG, "Invalid physical line number");
+		POST_ERROR(Err_Handler::EH_IPLN);
 	}
 	/* ToDo: Send command to card to power off */
 

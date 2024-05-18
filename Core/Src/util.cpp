@@ -2,6 +2,7 @@
 #include "top.h"
 #include "util.h"
 #include "logging.h"
+#include "err_handler.h"
 #include "pool_alloc.h"
 #include <string.h>
 #include <ctype.h>
@@ -83,7 +84,7 @@ char *Util::allocate_short_string(void)  {
 
 void Util::deallocate_short_string(char *str) {
 	if(!str) {
-		LOG_PANIC(TAG, "NULL pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	_short_strings_allocator.deallocate_object(str);
 }
@@ -109,7 +110,7 @@ char *Util::allocate_long_string(void)  {
 
 void Util::deallocate_long_string(char *str) {
 	if(!str) {
-		LOG_PANIC(TAG, "NULL pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	_long_strings_allocator.deallocate_object(str);
 }
@@ -128,7 +129,7 @@ uint32_t Util::get_num_allocated_long_strings(void) {
 
 char *Util::strncpy_term(char *dest, const char *source, size_t len) {
 	if((!dest) || (!source)) {
-		LOG_PANIC(TAG, "NULL pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 	char *res = strncpy(dest, source, len);
 	dest[len-1] = 0;
@@ -142,7 +143,8 @@ char *Util::strncpy_term(char *dest, const char *source, size_t len) {
 int32_t Util::strcasecmp(char const *a, char const *b)
 {
 	if((!a) || (!b)) {
-		LOG_PANIC(TAG, "NULL pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
+
 	}
     for (;; a++, b++) {
         int d = tolower((unsigned char)*a) - tolower((unsigned char)*b);
@@ -161,12 +163,12 @@ int32_t Util::strcasecmp(char const *a, char const *b)
 
 char *Util::make_trunk_dial_string(char *dest, const char *src, uint32_t start, uint32_t end, uint32_t max_len, char *prefix, char st_type) {
 	if((!dest) || (!src)) {
-		LOG_PANIC(TAG, "NULL pointer passed in");
+		POST_ERROR(Err_Handler::EH_NPFA);
 
 	}
 
 	if(max_len < 3) {
-		LOG_PANIC(TAG, "Bad parameter");
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 
 	uint32_t src_len = strlen(src);
@@ -188,13 +190,13 @@ char *Util::make_trunk_dial_string(char *dest, const char *src, uint32_t start, 
 	}
 	else {
 		if(start >= end) {
-			LOG_PANIC(TAG, "Bad parameter");
+			POST_ERROR(Err_Handler::EH_INVP);
 		}
 		total_len += (end - start) + prefix_len;
 	}
 
 	if(total_len > max_len) {
-		LOG_PANIC(TAG, "Bad parameter");
+		POST_ERROR(Err_Handler::EH_INVP);
 	}
 	char *p = prefix;
 	char *d = dest;
@@ -261,7 +263,7 @@ void *Util::memset(void *str, int c, size_t len) {
 
 bool Util::get_gpio_pin_state(uint32_t logical_pin) {
 	if(logical_pin >= NUM_LOGICAL_PIN_MAPPINGS) {
-		LOG_PANIC(TAG, "Logical pin mapping error");
+		POST_ERROR(Err_Handler::EH_LPME);
 	}
 	GPIO_TypeDef* port = pin_map[logical_pin].port;
 	uint16_t pin = pin_map[logical_pin].pin;
@@ -278,7 +280,7 @@ bool Util::get_gpio_pin_state(uint32_t logical_pin) {
 void Util::set_gpio_pin_state(uint32_t logical_pin, bool state) {
 
 	if(logical_pin >= NUM_LOGICAL_PIN_MAPPINGS) {
-		LOG_PANIC(TAG, "Logical pin mapping error");
+		POST_ERROR(Err_Handler::EH_LPME);
 	}
 	GPIO_TypeDef* port = pin_map[logical_pin].port;
 	uint16_t pin = pin_map[logical_pin].pin;
@@ -309,7 +311,7 @@ void Util::pulse_gpio_pin(uint32_t logical_pin) {
 void Util::toggle_gpio_pin(uint32_t logical_pin) {
 
 	if(logical_pin >= NUM_LOGICAL_PIN_MAPPINGS) {
-		LOG_PANIC(TAG, "Logical pin mapping error");
+		POST_ERROR(Err_Handler::EH_LPME);
 	}
 	GPIO_TypeDef* port = pin_map[logical_pin].port;
 	uint16_t pin = pin_map[logical_pin].pin;
