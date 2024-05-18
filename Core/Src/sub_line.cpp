@@ -246,7 +246,9 @@ uint32_t Sub_Line::peer_message_handler(Connector::Conn_Info *conn_info, uint32_
 
 	case Connector::PM_TRUNK_NO_WINK:
 		if((linfo->state == LS_WAIT_TRUNK_RESPONSE)) {
-				LOG_WARN(TAG, "No wink seen on trunk: %u", phys_line_trunk_number);
+				LOG_DEBUG(TAG, "PM_TRUNK_NO_WINK, tone plant descriptor %d", linfo->tone_plant_descriptor);
+				uint32_t dest_trunk_number = Conn.get_called_phys_line_trunk(linfo);
+				LOG_WARN(TAG, "No wink seen on trunk: %u", dest_trunk_number);
 				linfo->state = LS_SEND_CONGESTION;
 			}
 		break;
@@ -434,7 +436,7 @@ void Sub_Line::poll(void) {
 				linfo->state = LS_SEND_BUSY;
 				break;
 
-			case Connector::ROUTE_DEST_CONGESTED:
+			case Connector::ROUTE_DEST_TRUNK_BUSY:
 				linfo->state = LS_SEND_CONGESTION;
 				break;
 
@@ -517,15 +519,24 @@ void Sub_Line::poll(void) {
 
 
 	case LS_SEND_CONGESTION: /* Caller perspective */
+		if(Conn.get_called_equip_type(linfo) == Connector::ET_TRUNK) {
+			/* The trunk state machine releases any tone generator on an exception condition,
+			 * and disconnects it from the junctor.
+			 * We must seize it again and connect it to the junctor.
+			 */
+			if(!Conn.seize_and_connect_tone_generator(linfo)) {
+				/* No generator available, wait */
+				break;
+			}
+		}
+
 		/* Tell tone plant to send congestion tone */
-		osTimerStart(linfo->dial_timer, DTMF_DIGIT_DIAL_TIME);
+		osTimerStart(linfo->dial_timer, CONGESTION_SEND_TIME);
 		Conn.send_congestion(linfo);
 		linfo->state = LS_WAIT_HANGUP;
 		break;
 
 	case LS_CONGESTION_DISCONNECT:
-		/* Stop tone generation */
-		Tone_plant.stop(linfo->tone_plant_descriptor);
 		/* Release the tone generator */
 		Conn.release_tone_generator(linfo);
 		/* Release the junctor */

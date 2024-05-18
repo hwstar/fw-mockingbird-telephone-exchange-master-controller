@@ -5,6 +5,7 @@
 namespace Sub_Line {
 
 const uint32_t DTMF_DIGIT_DIAL_TIME = 30000; /* 30 seconds */
+const uint32_t CONGESTION_SEND_TIME = 30000; /* 30 Seconds */
 
 const uint8_t MAX_DUAL_LINE_CARDS = 4;
 const uint8_t LINE_CARD_I2C_ADDRESS = 0x30;

@@ -584,7 +584,7 @@ void XPS_Logical::disconnect_tone_plant_output(Junctor_Info *info) {
 
 	}
 	else {
-		LOG_PANIC(TAG, "XPS Connection");
+		LOG_PANIC(TAG, "XPS Connection, unexpected resource: %u", info->connections.tone_plant.resource);
 	}
 }
 

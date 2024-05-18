@@ -12,7 +12,7 @@ const uint32_t MAX_ROUTE_TABLES = 8;
 
 
 /* Route and connection return values */
-enum {ROUTE_INDETERMINATE = 0, ROUTE_VALID, ROUTE_INVALID, ROUTE_DEST_CONNECTED, ROUTE_DEST_BUSY, ROUTE_DEST_CONGESTED};
+enum {ROUTE_INDETERMINATE = 0, ROUTE_VALID=1, ROUTE_INVALID=2, ROUTE_DEST_CONNECTED=3, ROUTE_DEST_BUSY=4, ROUTE_DEST_TRUNK_BUSY=5, ROUTE_NO_MORE_TRUNKS=6};
 /* Equipment types */
 enum {ET_UNDEF=0, ET_LINE, ET_TRUNK};
 /* Peer messages */
@@ -64,6 +64,7 @@ typedef struct Conn_Info {
 
 	uint8_t route_table_number;
 	uint8_t phys_line_trunk_number;
+	uint8_t trunk_index;
 	uint8_t equip_type;
 	uint8_t state;
 	uint8_t pending_state;
@@ -99,6 +100,7 @@ public:
 	void prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32_t source_phys_line_number);
 	uint32_t test(Conn_Info *conn_info, const char *digits_received);
 	uint32_t resolve(Conn_Info *conn_info);
+	uint32_t resolve_try_next_trunk(Conn_Info *conn_info);
 
 	/* Peer-to-peer messaging */
 	/* For use by lines and trunks only in the event process. Does not respect locking */
@@ -118,7 +120,8 @@ public:
 	void disconnect_caller_party_audio(Conn_Info *linfo);
 	void release_mf_receiver(Conn_Info *linfo);
 	void release_dtmf_receiver(Conn_Info *linfo);
-	void release_tone_generator(Conn_Info *linfo);
+	void release_tone_generator(Conn_Info *info);
+	bool seize_and_connect_tone_generator(Conn_Info *info, bool orig_term=true);
 	void send_ringing(Conn_Info *info);
 	void send_busy(Conn_Info *info);
 	void send_congestion(Conn_Info *info);

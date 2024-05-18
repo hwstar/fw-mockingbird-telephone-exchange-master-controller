@@ -292,12 +292,12 @@ uint32_t Connector::resolve(Conn_Info *conn_info) {
 	memcpy(conn_info->route_info.dest_phys_lines_trunks,
 			conn_info->route_info.route_table_node->phys_lines_trunks,
 			MAX_PHYS_LINE_TRUNK_TABLE);
-	/* Send a seize message to the destination */
-	/* Todo Note: This doesn't handle groups of trunks yet. */
+	/* Send a seize message */
+	conn_info->trunk_index = 0; /* Select the first trunk */
 	uint32_t pm_res = this->send_peer_message(
 			conn_info,
 			conn_info->route_info.dest_equip_type,
-			conn_info->route_info.dest_phys_lines_trunks[0],
+			conn_info->route_info.dest_phys_lines_trunks[conn_info->trunk_index],
 			PM_SEIZE);
 	switch(pm_res) {
 	case PMR_OK:
@@ -309,7 +309,7 @@ uint32_t Connector::resolve(Conn_Info *conn_info) {
 		break;
 
 	case PMR_TRUNK_BUSY:
-		res = ROUTE_DEST_CONGESTED;
+		res = ROUTE_DEST_TRUNK_BUSY;
 		break;
 
 	default:
@@ -320,6 +320,61 @@ uint32_t Connector::resolve(Conn_Info *conn_info) {
 	ri->state = res;
 	return res;
 }
+
+/*
+ * Call when previous resolve or resolve_next trunk returns ROUTE_DEST_TRUNK_BUSY or the Trunk card returned BUSY after a seize message was sent to it.
+ * This method will attempt to use the next trunk in the list, if there are no more trunks
+ * in the list a ROUTE_NO_MORE_TRUNKS will be returned, otherwise ROUTE_DEST_CONNECTED, or ROUTE_DEST_TRUNK_BUSY will be returned.
+ */
+uint32_t Connector::resolve_try_next_trunk(Conn_Info *conn_info) {
+	uint32_t res = ROUTE_DEST_CONNECTED;
+
+	Route_Info *ri = &conn_info->route_info;
+
+	if(ri->dest_equip_type != ET_TRUNK) {
+		/* Cannot be called unless destination is a trunk */
+		LOG_PANIC(TAG,"Equipment type must be ET_TRUNK");
+	}
+	if((ri->state == ROUTE_INVALID) || (ri->state == ROUTE_INDETERMINATE)) {
+		LOG_PANIC(TAG,"Invalid route state");
+	}
+
+	/* See if there's another trunk available in the list */
+	if(ri->state != ROUTE_NO_MORE_TRUNKS) {
+		conn_info->trunk_index++;
+	}
+	if(conn_info->trunk_index >= ri->dest_line_trunk_count) {
+		res = ROUTE_NO_MORE_TRUNKS;
+	}
+	else {
+		/* Try seizing the next trunk in the list */
+		uint32_t pm_res = this->send_peer_message(
+				conn_info,
+				conn_info->route_info.dest_equip_type,
+				conn_info->route_info.dest_phys_lines_trunks[conn_info->trunk_index],
+				PM_SEIZE);
+		switch(pm_res) {
+		case PMR_OK:
+			res = ROUTE_DEST_CONNECTED;
+			break;
+
+		case PMR_TRUNK_BUSY:
+			res = ROUTE_DEST_TRUNK_BUSY;
+			break;
+
+		default:
+			LOG_PANIC(TAG, "Bad return value");
+			break;
+		}
+
+	}
+
+
+	ri->state = res;
+	return res;
+
+}
+
 
 /*
  * Send message to called destination
@@ -560,18 +615,51 @@ void Connector::release_dtmf_receiver(Conn_Info *linfo) {
  * Release tone generator and disconnect it from the junctor if seized
  */
 
-void Connector::release_tone_generator(Conn_Info *linfo) {
-	if(!linfo) {
+void Connector::release_tone_generator(Conn_Info *info) {
+	if(!info) {
 		LOG_PANIC(TAG, "Null pointer passed in");
 	}
-	if(linfo->tone_plant_descriptor != -1) {
-		Tone_plant.stop(linfo->tone_plant_descriptor);
-		Xps_logical.disconnect_tone_plant_output(&linfo->jinfo);
-		Tone_plant.channel_release(linfo->tone_plant_descriptor);
-		linfo->tone_plant_descriptor = -1;
+	if(info->tone_plant_descriptor != -1) {
+		Tone_plant.stop(info->tone_plant_descriptor);
+		/* Only disconnect if the proper resource was allocated */
+		if(info->jinfo.connections.tone_plant.resource == XPS_Logical::RSRC_TONE_PLANT) {
+			Xps_logical.disconnect_tone_plant_output(&info->jinfo);
+		}
+		else if(info->jinfo.connections.tone_plant.resource != XPS_Logical::RSRC_NONE) {
+			LOG_PANIC(TAG, "Invalid resource type");
+		}
+		Tone_plant.channel_release(info->tone_plant_descriptor);
+		info->tone_plant_descriptor = -1;
 
 
 	}
+}
+
+
+/*
+ * Seize and connect a tone generator.
+ * Return true if successful, or false if no generator is available.
+ *
+ * Note: Will disconnect and reconnect if a tone plant was previously connected.
+ */
+bool Connector::seize_and_connect_tone_generator(Conn_Info *info, bool orig_term) {
+	/*
+	 * If there is a valid descriptor, then the
+	 * previous connection may have not been connected to the correct end of the call
+	 * release it here.
+	 */
+	if(!info) {
+		LOG_PANIC(TAG, "NULL pointer passed in");
+	}
+
+	Conn.release_tone_generator(info);
+
+	info->tone_plant_descriptor = Tone_plant.channel_seize();
+	if(info->tone_plant_descriptor == -1) {
+		return false;
+	}
+	Xps_logical.connect_tone_plant_output(&info->jinfo, info->tone_plant_descriptor, orig_term);
+	return true;
 }
 
 /*

@@ -385,7 +385,7 @@ void Trunk::poll(void) {
 			res = Conn.resolve(tinfo);
 			switch(res) {
 			case Connector::ROUTE_INVALID:
-			case Connector::ROUTE_DEST_CONGESTED:
+			case Connector::ROUTE_DEST_TRUNK_BUSY:
 				tinfo->state = TS_SEND_CONGESTION;
 				break;
 
@@ -466,6 +466,10 @@ void Trunk::poll(void) {
 		tinfo->state = TS_RESET;
 		break;
 
+
+	/*
+	 * Outgoing trunk states
+	 */
 
 	case TS_OUTGOING_START:
 		/* Test for call drop */
@@ -594,7 +598,9 @@ void Trunk::poll(void) {
 
 	case TS_GOT_NO_WINK: {
 		/* Timed out waiting for wink */
-		/* LOG_DEBUG(TAG, "Sending Wink timeout PM"); */
+	    /* Disconnect the tone generator, the originator will reconnect it to the correct place if need be */
+		Conn.release_tone_generator(tinfo->peer);
+		LOG_DEBUG(TAG, "Sending Wink timeout PM");
 		Conn.send_peer_message(tinfo, Connector::PM_TRUNK_NO_WINK);
 		tinfo->state = TS_RELEASE_TRUNK;
 	}
@@ -605,6 +611,8 @@ void Trunk::poll(void) {
 
 	case TS_SEND_TRUNK_BUSY: {
 		/* LOG_DEBUG(TAG, "Sending trunk busy PM"); */
+		/* Disconnect the tone generator, the originator will reconnect it to the correct place if need be */
+		Conn.release_tone_generator(tinfo->peer);
 		Conn.send_peer_message(tinfo, Connector::PM_TRUNK_BUSY);
 		tinfo->state = TS_RELEASE_TRUNK;
 	}
@@ -612,8 +620,6 @@ void Trunk::poll(void) {
 
 
 	case TS_RELEASE_TRUNK:
-		/* Release the trunk by sending REG_DROP_CALL to the trunk card, then clean up */
-		Conn.release_tone_generator(tinfo->peer);
 		/* LOG_DEBUG(TAG, "Sending release command to trunk card %u", this->_trunk_to_service); */
 		Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_DROP_CALL);
 		tinfo->state = TS_RESET;
