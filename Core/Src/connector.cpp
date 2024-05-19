@@ -28,7 +28,7 @@ static const Route_Table_Entry line_route_table_entries[] = {
 {"2980405", ET_LINE, 0, 0, 1, {5}},
 {"2980406", ET_LINE, 0, 0, 1, {6}},
 {"2980407", ET_LINE, 0, 0, 1, {7}},
-{"_298XXXX", ET_TRUNK,0, 0, 1, {2}},
+{"_298XXXX", ET_TRUNK,0, 0, 2, {2,1}},
 
 {"", ET_UNDEF, 0, 0, 0, {0}}, /* Marks the end of the route table */
 
@@ -487,11 +487,19 @@ uint32_t Connector::get_caller_phys_line_trunk(Conn_Info *conn_info) {
  */
 
 uint32_t Connector::get_called_phys_line_trunk(Conn_Info *conn_info) {
+	uint8_t ltindex;
+
 	if(!conn_info) {
 		POST_ERROR(Err_Handler::EH_NPFA);
 	}
-	/* Todo: does not support multiple trunks */
-	return conn_info->route_info.dest_phys_lines_trunks[0];
+	if(this->get_called_equip_type(conn_info) == ET_TRUNK) {
+		ltindex = conn_info->trunk_index;
+	}
+	else {
+		ltindex = 0; /* Hunting not supported on lines yet */
+	}
+
+	return conn_info->route_info.dest_phys_lines_trunks[ltindex];
 }
 
 

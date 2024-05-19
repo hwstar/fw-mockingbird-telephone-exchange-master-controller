@@ -124,6 +124,7 @@ void Sub_Line::event_handler(uint32_t event_type, uint32_t resource) {
 
 		case LS_SEIZE_TRUNK:
 		case LS_WAIT_TRUNK_RESPONSE:
+		case LS_TRUNK_ADVANCE:
 		case LS_TRUNK_SEND_ADDR_INFO:
 		case LS_TRUNK_WAIT_ADDR_SENT:
 		case LS_TRUNK_CONNECT_CALLER:
@@ -238,24 +239,21 @@ uint32_t Sub_Line::peer_message_handler(Connector::Conn_Info *conn_info, uint32_
 
 	case Connector::PM_TRUNK_BUSY:
 		if((linfo->state == LS_WAIT_TRUNK_RESPONSE)) {
-			LOG_INFO(TAG, "Trunk busy");
-
-
-
+			LOG_INFO(TAG, "Trunk busy returned by PM");
+			linfo->state = LS_TRUNK_ADVANCE;
 		}
 		break;
 
 	case Connector::PM_TRUNK_NO_WINK:
 		if((linfo->state == LS_WAIT_TRUNK_RESPONSE)) {
-				LOG_DEBUG(TAG, "PM_TRUNK_NO_WINK, tone plant descriptor %d", linfo->tone_plant_descriptor);
 				uint32_t dest_trunk_number = Conn.get_called_phys_line_trunk(linfo);
 				LOG_WARN(TAG, "No wink seen on trunk: %u", dest_trunk_number);
-				linfo->state = LS_SEND_CONGESTION;
+				linfo->state = LS_TRUNK_ADVANCE;
 			}
 		break;
 
 	case Connector::PM_TRUNK_READY_FOR_ADDR_INFO:
-		if(linfo->state == LS_WAIT_TRUNK_RESPONSE) {
+		if((linfo->state == LS_WAIT_TRUNK_RESPONSE) || (linfo->state = LS_TRUNK_ADVANCE)) {
 			linfo->state = LS_TRUNK_SEND_ADDR_INFO;
 		}
 		break;
@@ -438,7 +436,8 @@ void Sub_Line::poll(void) {
 				break;
 
 			case Connector::ROUTE_DEST_TRUNK_BUSY:
-				linfo->state = LS_SEND_CONGESTION;
+				LOG_DEBUG(TAG, "Trunk busy returned by Conn.resolve()");
+				linfo->state = LS_TRUNK_ADVANCE;
 				break;
 
 			default:
@@ -453,6 +452,35 @@ void Sub_Line::poll(void) {
 
 	case LS_WAIT_TRUNK_RESPONSE: /* Caller perspective */
 		/* Wait for the trunk to respond with a peer message */
+		break;
+
+
+	case LS_TRUNK_ADVANCE: {
+		/* See if we can use a different trunk */
+		uint32_t res = Conn.resolve_try_next_trunk(linfo);
+		switch(res) {
+		case Connector::ROUTE_DEST_TRUNK_BUSY:
+			LOG_DEBUG(TAG, "Trunk busy after trunk advance");
+			break; /* This trunk is busy, try again later */
+
+		case Connector::ROUTE_NO_MORE_TRUNKS:
+			/* No more outgoing trunks to try */
+			LOG_DEBUG(TAG, "No more trunks after trunk advance");
+			linfo->state = LS_SEND_CONGESTION;
+			break;
+
+		case Connector::ROUTE_DEST_CONNECTED:
+			LOG_DEBUG(TAG, "Trunk advance successful");
+			/* Connected, send address info */
+			linfo->state = LS_WAIT_TRUNK_RESPONSE;
+			break;
+
+		default:
+			/* Unhandled result */
+			POST_ERROR(Err_Handler::EH_UHC);
+			break;
+		}
+	}
 		break;
 
 	case LS_TRUNK_SEND_ADDR_INFO: { /* Caller perspective */

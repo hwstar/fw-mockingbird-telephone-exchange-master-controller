@@ -59,7 +59,7 @@ const uint8_t trunk_commands_arg_type[] = {AT_UINT, AT_END};
 const Command_Table_Entry_Type test_trunk_commands[] = {
 	{NULL, command_trunk_offline, trunk_commands_arg_type, "offline"},
 	{NULL, command_trunk_online, trunk_commands_arg_type, "online"},
-	{NULL, command_trunk_busy, trunk_commands_arg_type, "busy"},
+	{NULL, command_trunk_busy, NULL, "status"},
 
 	{NULL, NULL, NULL, ""}
 };
@@ -812,20 +812,21 @@ static bool command_trunk_offline(Holder_Type *vars, uint32_t *error_code) {
 static bool command_trunk_busy(Holder_Type *vars, uint32_t *error_code) {
 	unsigned trunk_number;
 	bool res;
+	uint8_t pos_bits = HW_pres.get_trunk_card_positions();
 
-	res = System_console.get_unsigned(vars, 0, &trunk_number);
+	if(HW_pres.get_count_trunk_cards()) {
+		printf("TRUNK STATE\n");
+		printf("----- -----\n");
+	}
 
-	if(res == false) {
-		*error_code = CEC_TABLE_ERROR;
-		return false;
-	}
-	res = Trunks.is_in_use(trunk_number);
-	if(res) {
-		printf("Trunk %d is busy\n", trunk_number);
-	}
-	else {
-		printf("Trunk %d is not busy\n", trunk_number);
-	}
+    for(trunk_number = 0; trunk_number < Trunk::MAX_TRUNK_CARDS; trunk_number++) {
+    	if(pos_bits & (1 << trunk_number)) {
+    		res = Trunks.is_in_use(trunk_number);
+    		printf("%-5u %s\n", trunk_number, (res) ? "BUSY" : "IDLE");
+    	}
+    }
+    printf("\nTrunk count: %u\n", HW_pres.get_count_trunk_cards());
+
 	return true;
 
 }

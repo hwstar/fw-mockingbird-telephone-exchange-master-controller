@@ -542,6 +542,7 @@ void Trunk::poll(void) {
 			tinfo->state = TS_OUTGOING_SEND_ADDR_INFO_B;
 			/* Send Address info in MF */
 			Tone_plant.send_mf(tinfo->peer->tone_plant_descriptor, tinfo->peer->trunk_outgoing_address, __mf_sending_complete, tinfo);
+
 		}
 		break;
 
