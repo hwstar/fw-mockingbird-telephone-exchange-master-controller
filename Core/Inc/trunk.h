@@ -25,7 +25,8 @@ enum {TS_IDLE=0, TS_SEIZE_JUNCTOR=1, TS_SEIZE_TG=2, TS_SEIZE_MFR=3, TS_WAIT_ADDR
 	TS_INCOMING_TEARDOWN=14, TS_OUTGOING_START=15, TS_WAIT_WINK_OR_BUSY=16, TS_OUTGOING_REQUEST_ADDR_INFO=17,
 	TS_OUTGOING_WAIT_ADDR_INFO=18, TS_GOT_NO_WINK=19, TS_RELEASE_TRUNK=20, TS_SEND_TRUNK_BUSY=21,
 	TS_SEND_TRUNK_BUSY_AT_SEIZURE=22, TS_OUTGOING_SEND_ADDR_INFO=23, TS_OUTGOING_SEND_ADDR_INFO_B=24,
-	TS_OUTGOING_SEND_ADDR_INFO_C=25, TS_OUTGOING_WAIT_SUPV=26, TS_OUTGOING_ANSWERED=27, TS_OUTGOING_IN_CALL=28, TS_OUTGOING_SEND_FAREND_DISC=29, TS_RESET=255};
+	TS_OUTGOING_SEND_ADDR_INFO_C=25, TS_OUTGOING_WAIT_SUPV=26, TS_OUTGOING_ANSWERED=27, TS_OUTGOING_IN_CALL=28,
+	TS_OUTGOING_SEND_FAREND_DISC=29, TS_OFFLINE=30, TS_RESET=255};
 
 
 
@@ -46,6 +47,9 @@ public:
 	void event_handler(uint32_t event_type, uint32_t resource);
 	void init(void);
 	void poll(void);
+	bool go_offline(uint32_t trunk_number);
+	bool go_online(uint32_t trunk_number);
+	bool is_in_use(uint32_t trunk_number);
 	uint32_t peer_message_handler(Connector::Conn_Info *conn_info, uint32_t phys_line_trunk_number, uint32_t message, void *data = NULL);
 
 };

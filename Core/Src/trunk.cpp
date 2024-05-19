@@ -8,6 +8,7 @@
 #include "tone_plant.h"
 #include "xps_logical.h"
 #include "connector.h"
+#include "hw_pres.h"
 #include "trunk.h"
 
 Trunk::Trunk Trunks;
@@ -114,73 +115,80 @@ void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
 
 	/* Incoming call from trunk */
 
-	switch(event_type) {
-	case EV_REQUEST_IR:
-		if(tinfo->state == TS_IDLE) {
-			tinfo->state = TS_SEIZE_JUNCTOR;
-		}
-		break;
-	case EV_CALL_DROPPED:
-		switch(tinfo->state) {
-		case TS_SEIZE_JUNCTOR:
-		case TS_SEIZE_TG:
-		case TS_SEIZE_MFR:
-		case TS_WAIT_ADDR_INFO:
-		case TS_HAVE_ADDR_INFO:
-		case TS_SEND_BUSY:
-		case TS_SEND_CONGESTION:
-		case TS_INCOMING_FAILED:
-		case TS_INCOMING_CONNECT_AUDIO:
-			tinfo->state = TS_RESET;
+	/* Only change trunk states if online, ignore them otherwise */
+
+	if(tinfo->state != TS_OFFLINE) {
+
+		/* Act on event */
+
+		switch(event_type) {
+		case EV_REQUEST_IR:
+			if(tinfo->state == TS_IDLE) {
+				tinfo->state = TS_SEIZE_JUNCTOR;
+			}
+			break;
+		case EV_CALL_DROPPED:
+			switch(tinfo->state) {
+			case TS_SEIZE_JUNCTOR:
+			case TS_SEIZE_TG:
+			case TS_SEIZE_MFR:
+			case TS_WAIT_ADDR_INFO:
+			case TS_HAVE_ADDR_INFO:
+			case TS_SEND_BUSY:
+			case TS_SEND_CONGESTION:
+			case TS_INCOMING_FAILED:
+			case TS_INCOMING_CONNECT_AUDIO:
+				tinfo->state = TS_RESET;
+				break;
+
+			case TS_INCOMING_ANSWERED:
+				tinfo->state = TS_INCOMING_TEARDOWN;
+				tinfo->called_party_hangup = false;
+				break;
+
+			case TS_INCOMING_WAIT_SUPV:
+			case TS_SEND_RINGING:
+				tinfo->state = TS_RINGING_TEARDOWN;
+				break;
+
+			default:
+				break;
+			}
 			break;
 
-		case TS_INCOMING_ANSWERED:
-			tinfo->state = TS_INCOMING_TEARDOWN;
-			tinfo->called_party_hangup = false;
+
+		case EV_BUSY:
+			if(tinfo->state == TS_WAIT_WINK_OR_BUSY) {
+				tinfo->state = TS_SEND_TRUNK_BUSY;
+			}
 			break;
 
-		case TS_INCOMING_WAIT_SUPV:
-		case TS_SEND_RINGING:
-			tinfo->state = TS_RINGING_TEARDOWN;
+		case EV_NO_WINK:
+			if(tinfo->state == TS_WAIT_WINK_OR_BUSY) {
+				tinfo->state = TS_GOT_NO_WINK;
+			}
 			break;
 
-		default:
+		case EV_SEND_ADDR_INFO:
+			if(tinfo->state == TS_WAIT_WINK_OR_BUSY) {
+				tinfo->state = TS_OUTGOING_REQUEST_ADDR_INFO;
+			}
 			break;
+
+		case EV_FAREND_SUPV:
+			if(tinfo->state == TS_OUTGOING_WAIT_SUPV) {
+				tinfo->state = TS_OUTGOING_ANSWERED;
+			}
+			break;
+
+		case EV_FAREND_DISC:
+			if(tinfo->state == TS_OUTGOING_IN_CALL) {
+				tinfo->state = TS_OUTGOING_SEND_FAREND_DISC;
+			}
+			break;
+
+
 		}
-		break;
-
-
-	case EV_BUSY:
-		if(tinfo->state == TS_WAIT_WINK_OR_BUSY) {
-			tinfo->state = TS_SEND_TRUNK_BUSY;
-		}
-		break;
-
-	case EV_NO_WINK:
-		if(tinfo->state == TS_WAIT_WINK_OR_BUSY) {
-			tinfo->state = TS_GOT_NO_WINK;
-		}
-		break;
-
-	case EV_SEND_ADDR_INFO:
-		if(tinfo->state == TS_WAIT_WINK_OR_BUSY) {
-			tinfo->state = TS_OUTGOING_REQUEST_ADDR_INFO;
-		}
-		break;
-
-	case EV_FAREND_SUPV:
-		if(tinfo->state == TS_OUTGOING_WAIT_SUPV) {
-			tinfo->state = TS_OUTGOING_ANSWERED;
-		}
-		break;
-
-	case EV_FAREND_DISC:
-		if(tinfo->state == TS_OUTGOING_IN_CALL) {
-			tinfo->state = TS_OUTGOING_SEND_FAREND_DISC;
-		}
-		break;
-
-
 	}
 	osMutexRelease(this->_lock); /* Release the lock */
 }
@@ -645,6 +653,9 @@ void Trunk::poll(void) {
 		tinfo->state = TS_IDLE;
 		break;
 
+	case TS_OFFLINE:
+		break;
+
 
 	default:
 		LOG_ERROR(TAG, "Unhandled state %u", tinfo->state);
@@ -662,6 +673,103 @@ void Trunk::poll(void) {
 
 	osMutexRelease(this->_lock); /* Release the lock */
 
+
+}
+
+/*
+ * Place a trunk off line for testing purposes
+ *
+ * Returns true if successful
+ */
+
+bool Trunk::go_offline(uint32_t trunk_number) {
+
+	uint8_t trunk_map = HW_pres.get_trunk_card_positions();
+	if((trunk_number > MAX_TRUNK_CARDS) || ((trunk_map & (1 << trunk_number)) == 0)) {
+		return false;
+	}
+
+	bool res = true;
+	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
+
+	Connector::Conn_Info *tinfo = &this->_conn_info[trunk_number];
+
+	if(tinfo->state == TS_IDLE) {
+		tinfo->state = TS_OFFLINE;
+	}
+	else {
+		res = false;
+	}
+
+
+
+	osMutexRelease(this->_lock); /* Release the lock */
+
+	return res;
+
+/*
+ * Place a trunk on line for testing purposes
+ *
+ * Returns true if successful
+ */
+
+
+}
+bool Trunk::go_online(uint32_t trunk_number) {
+
+	uint8_t trunk_map = HW_pres.get_trunk_card_positions();
+
+	if((trunk_number > MAX_TRUNK_CARDS) || ((trunk_map & (1 << trunk_number)) == 0)) {
+		return false;
+	}
+
+	bool res = true;
+	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
+
+	Connector::Conn_Info *tinfo = &this->_conn_info[trunk_number];
+
+	if(tinfo->state == TS_OFFLINE) {
+		tinfo->state = TS_IDLE;
+	}
+	else {
+		res = false;
+	}
+
+
+	osMutexRelease(this->_lock); /* Release the lock */
+
+	return res;
+
+}
+
+/*
+ * Test to see if a trunk is in use.
+ *
+ * Will return false if the trunk is idle.
+ *
+ * Will return true if the trunk is in use, or not installed.
+ */
+
+
+bool Trunk::is_in_use(uint32_t trunk_number) {
+	uint8_t trunk_map = HW_pres.get_trunk_card_positions();
+
+	if((trunk_number > MAX_TRUNK_CARDS) || ((trunk_map & (1 << trunk_number)) == 0)) {
+		return true;
+	}
+
+	bool res = true;
+	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
+
+	Connector::Conn_Info *tinfo = &this->_conn_info[trunk_number];
+
+	if(tinfo->state == TS_IDLE) {
+		res = false;
+	}
+
+	osMutexRelease(this->_lock); /* Release the lock */
+
+	return res;
 
 }
 

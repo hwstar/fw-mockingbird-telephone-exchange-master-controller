@@ -49,6 +49,21 @@ static bool command_dtmfr_seize(Holder_Type *vars, uint32_t *error_code);
 static bool command_dtmfr_release(Holder_Type *vars, uint32_t *error_code);
 static bool command_config_hw_view_present(Holder_Type *vars, uint32_t *error_code);
 static bool command_help(Holder_Type *vars, uint32_t *error_code);
+static bool command_trunk_offline(Holder_Type *vars, uint32_t *error_code);
+static bool command_trunk_online(Holder_Type *vars, uint32_t *error_code);
+static bool command_trunk_busy(Holder_Type *vars, uint32_t *error_code);
+
+
+
+const uint8_t trunk_commands_arg_type[] = {AT_UINT, AT_END};
+const Command_Table_Entry_Type test_trunk_commands[] = {
+	{NULL, command_trunk_offline, trunk_commands_arg_type, "offline"},
+	{NULL, command_trunk_online, trunk_commands_arg_type, "online"},
+	{NULL, command_trunk_busy, trunk_commands_arg_type, "busy"},
+
+	{NULL, NULL, NULL, ""}
+};
+
 
 
 const uint8_t dtmfr_seize_arg_type[] = {AT_UINT, AT_END};
@@ -98,6 +113,7 @@ const Command_Table_Entry_Type test_xps_open_close_level[] = {
 const Command_Table_Entry_Type test_xps_level[] = {
 	{test_xps_dtmfr_level, NULL, NULL, "dtmfr"},
 	{test_xps_mfr_level, NULL, NULL, "mfr"},
+	{test_trunk_commands, NULL, NULL, "trunk"},
 	{test_tg_command_level, NULL, NULL, "tg"},
 	{test_xps_open_close_level, NULL, NULL, "xps"},
 
@@ -141,6 +157,7 @@ const char *console_error_strings[] = {
 	{"Resource in use"},
 	{"No resource"},
 	{"Resource already allocated"},
+	{"Trunk not present, or in use"},
 
 	{"Unknown Error"}
 };
@@ -740,6 +757,80 @@ static bool command_dtmfr_release(Holder_Type *vars, uint32_t *error_code) {
 	return true;
 }
 
+/*
+ * Place a trunk online
+ */
+
+static bool command_trunk_online(Holder_Type *vars, uint32_t *error_code) {
+	unsigned trunk_number;
+	bool res;
+
+	res = System_console.get_unsigned(vars, 0, &trunk_number);
+
+	if(res == false) {
+		*error_code = CEC_TABLE_ERROR;
+		return false;
+	}
+
+	res = Trunks.go_online(trunk_number);
+
+	if(res == false) {
+		*error_code = CEC_TRUNK_NOT_PRESENT_OR_IN_USE;
+
+	}
+
+	return res;
+
+}
+
+/*
+ * Place a trunk offline
+ */
+
+static bool command_trunk_offline(Holder_Type *vars, uint32_t *error_code) {
+	unsigned trunk_number;
+	bool res;
+
+	res = System_console.get_unsigned(vars, 0, &trunk_number);
+
+	if(res == false) {
+		*error_code = CEC_TABLE_ERROR;
+		return false;
+	}
+
+	res = Trunks.go_offline(trunk_number);
+
+	if(res == false) {
+		*error_code = CEC_TRUNK_NOT_PRESENT_OR_IN_USE;
+
+	}
+
+	return res;
+
+}
+
+static bool command_trunk_busy(Holder_Type *vars, uint32_t *error_code) {
+	unsigned trunk_number;
+	bool res;
+
+	res = System_console.get_unsigned(vars, 0, &trunk_number);
+
+	if(res == false) {
+		*error_code = CEC_TABLE_ERROR;
+		return false;
+	}
+	res = Trunks.is_in_use(trunk_number);
+	if(res) {
+		printf("Trunk %d is busy\n", trunk_number);
+	}
+	else {
+		printf("Trunk %d is not busy\n", trunk_number);
+	}
+	return true;
+
+}
+
+
 
 
 /*
@@ -758,7 +849,7 @@ void Console::_print_error_code(uint32_t error_code) {
 	}
 	const char *error_string = console_error_strings[error_code];
 
-	printf("E%02u: %s\n", (unsigned) error_code, error_string);
+	printf("CE%02u: %s\n", (unsigned) error_code, error_string);
 }
 
 /*
