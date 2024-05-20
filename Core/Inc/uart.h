@@ -13,6 +13,7 @@ class Uart {
 public:
 	void setup(UART_HandleTypeDef *uh) {this->uart = uh;};
 	void rx_int(char c) {this->_rx_rb.put(c); return; };
+	void error_handler(UART_HandleTypeDef *uh);
 	void putc(char c);
 	void flush(void) {return;}
 	char getc(void) { return (char) this->_rx_rb.get(); };

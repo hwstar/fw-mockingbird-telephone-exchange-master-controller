@@ -27,4 +27,9 @@ void Uart::putc(char c) {
 	}
 }
 
+
+void Uart::error_handler(UART_HandleTypeDef *uh) {
+
+}
+
 } // End namespace Uart_Rx

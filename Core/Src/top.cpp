@@ -132,6 +132,16 @@ void Top_uart_handler(UART_HandleTypeDef *uart_handle) {
 	}
 }
 
+/*
+ * UART Error Callback
+ */
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *uart_handle) {
+	if(uart_handle == &huart5) {
+		Console_uart.error_handler(uart_handle);
+	}
+
+}
 
 /*
  * ADC DMA Half buffer full interrupt
