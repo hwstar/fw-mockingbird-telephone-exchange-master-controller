@@ -39,6 +39,7 @@ protected:
 
 public:
 	void init(void);
+	void config(void);
 	void event_handler(uint32_t event_type, uint32_t resource);
 	void set_power_state(uint32_t line, bool state);
 	void _digit_receiver_callback(int32_t descriptor, char digit, uint32_t parameter);

@@ -15,7 +15,7 @@
 #include "card_comm.h"
 #include "file_io.h"
 #include "hw_pres.h"
-#include "json_rw.h"
+#include "config_rw.h"
 #include "connector.h"
 
 
@@ -46,7 +46,10 @@ void Top_init(void) {
 
 	osDelay(1000);
 
-	/* Resources */
+	/*
+	 * Resources
+	 */
+
 	Utility.init();
 	Logger.init();
 	I2c.init();
@@ -57,17 +60,30 @@ void Top_init(void) {
 	Xps_logical.init();
 	Card_comm.init();
 
+	/* After resources.
+	 * Depends on resources being initialized
+	 */
 
-
-
-	/* After resources. Depends on resources being initialized */
 	File_io.init();
-	Json_rw.init();
+	Config_rw.init();
 	HW_pres.probe();
 	Trunks.init();
 	Sub_line.init();
 	Conn.init();
+
+
+	/*
+	 * Call configuration methods here
+	 */
+	Sub_line.config();
+	Conn.config();
+
+	/*
+	 * Start processing calls
+	 */
+
 	Event_handler.init();
+
 
 	/* Test Code Begin */
 	Card_comm.send_command(Card_Comm::RT_LINE, 0, Sub_Line::REG_POWER_CTRL, true);

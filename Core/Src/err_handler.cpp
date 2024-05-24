@@ -41,6 +41,10 @@ static const Error_Table_Entry Error_table[] = {
 		{ACTION_PANIC, "Logical pin mapping error"}, /* 30 */
 		{ACTION_PANIC, "Invalid junctor number"},
 		{ACTION_PANIC, "Connection resource conflict"},
+		{ACTION_PANIC, "Could not open config file"},
+		{ACTION_PANIC, "Configuration file error"},
+		{ACTION_PANIC, "File system error"},
+		{ACTION_PANIC, "Configuration file syntax error"},
 
 
 
@@ -53,6 +57,7 @@ static const Error_Table_Entry Error_table[] = {
 };
 
 void Err_Handler::post(uint16_t error_code, const char *tag, uint32_t line, const char *addl_info) {
+	osDelay(300); /* Wait for queued log messages to get sent */
 	if(!tag) {
 		LOG_PANIC("TAG", Error_table[EH_NPFA].error_message);
 	}

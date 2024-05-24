@@ -307,6 +307,18 @@ void Sub_Line::init(void) {
 	}
 }
 
+
+/*
+ * Called when the system is about to go on line
+ *
+ * Set up config here.
+ */
+
+void Sub_Line::config(void) {
+
+}
+
+
 /*
  * Polling
  */

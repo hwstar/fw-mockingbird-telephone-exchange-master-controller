@@ -55,6 +55,13 @@ public:
 	bool update_scope_test_point(uint32_t test_point, bool state, const char *tag="nomodule", uint32_t line=0);
 	bool toggle_scope_test_point(uint32_t test_point, const char *tag="nomodule", uint32_t line=0);
 	char *make_trunk_dial_string(char *dest, const char *src, uint32_t start, uint32_t end, uint32_t max_len, char *prefix = NULL, char st_type = '#');
+	char *strdup(const char *str);
+	char *strdup_until(const char *str, char stop_char, uint32_t max_len);
+	char *str_split(const char *str, char *substrings[], uint32_t &substring_count, char split_char);
+	int32_t keyword_match(const char *check_str, const char *match_table[]);
+	bool is_digits(const char *str);
+	bool is_routing_table_entry(const char *str);
+	char *trim(char *str);
 
 
 

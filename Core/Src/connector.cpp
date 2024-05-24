@@ -49,8 +49,6 @@ static const Route_Table_Entry incoming_trunk_route_table_entries[] = {
 
 };
 
-
-
 /*
  * Test the digits currently received against a route table entry
  */
@@ -138,6 +136,16 @@ void Connector::init(void) {
 			incoming_trunk_route_table_entries[index].match_string
 			);
 	}
+}
+
+/*
+ * Called when the system is about to go on line
+ *
+ * Read configuration data and set up configuration here
+ */
+
+void Connector::config() {
+
 }
 
 /*

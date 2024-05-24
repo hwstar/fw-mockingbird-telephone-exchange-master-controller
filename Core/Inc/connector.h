@@ -94,6 +94,7 @@ protected:
 public:
 
 	void init(void);
+	void config();
 	bool add_route(uint32_t table_number, uint32_t dest_equip_type, uint32_t phys_line_trunk_count,
 			uint32_t trunk_addressing_start, uint32_t trunk_addressing_end, const uint8_t *dest_phys_lines_trunks, const char *match_string );
 

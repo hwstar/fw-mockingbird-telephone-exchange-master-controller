@@ -34,13 +34,17 @@ enum {
 	EH_MQCF=23, /* Message queue creation failed */
 	EH_NOTS=24, /* Timer start failed */
 	EH_FRAA=25, /* Attempt made to free receiver already available */
-	EH_AOOM=26, /* Allocator out of menory */
+	EH_AOOM=26, /* Allocator out of memory */
 	EH_MCD=27, /* Memory corruption detected */
 	EH_ISAI=28, /* Invalid SAI channel number */
 	EH_ICPT=29, /* Invalid call progress type */
 	EH_LPME=30, /* Logical pin mapping error */
 	EH_IJN=31, /* Invalid junctor number */
 	EH_CNRC=32, /* Connection resource conflict */
+	EH_NOCF=33, /* Could not open config file */
+	EH_CFER=34, /* Configuration file error */
+	EH_FSER=35, /* File system error */
+	EH_CFSE=36, /* Configuration file syntax error */
 
 	EH_NUM_ERROR_CODES
 };

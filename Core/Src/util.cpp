@@ -244,6 +244,208 @@ char *Util::make_trunk_dial_string(char *dest, const char *src, uint32_t start, 
 	return dest;
 }
 
+/*
+ * Duplicate a string using long string memory pool
+ *
+ * String needs to be freed when no longer needed using deallocate_long_string() to avoid no memory fatal errors.
+ */
+
+char *Util::strdup(const char *str) {
+	if(!str) {
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
+	char *dup_string = this->allocate_long_string();
+	this->strncpy_term(dup_string, str, LONG_STRINGS_SIZE );
+	return dup_string;
+}
+
+/*
+ * Copy string until stop character is seen. Do not include the stop character
+ * String copied into a long string pool allocation.
+ * Returns NULL if failure.
+ *
+ * String needs to be freed when no longer needed using deallocate_long_string() to avoid no memory fatal errors.
+ */
+
+char *Util::strdup_until(const char *str, char stop_char, uint32_t max_len) {
+	uint32_t stop_pos;
+	/* Attempt to locate stop character in string */
+	for(stop_pos = 0; (( stop_pos < max_len - 1) && (str[stop_pos]) && (str[stop_pos] != stop_char)); stop_pos++);
+
+	if(stop_pos >= max_len) {
+		/* Max len reached */
+		return NULL;
+	}
+	else if(!str[stop_pos]) {
+		/* End of string reached */
+		return NULL;
+	}
+	else if (stop_pos >= LONG_STRINGS_SIZE - 1) {
+		/* Stop position beyond size of long string */
+		return NULL;
+	}
+
+	/* Allocate a long string */
+	char *dup_string = this->allocate_long_string();
+	if(dup_string) {
+		/* Copy substring to newly allocated long string */
+		this->strncpy_term(dup_string, str, stop_pos + 1);
+	}
+
+	return dup_string;
+}
+
+/*
+ * Trim all spaces and tabs from string
+ */
+
+char *Util::trim(char *str) {
+
+	char *work_string = this->strdup(str);
+	uint32_t s_index;
+	uint32_t d_index;
+	for(s_index = 0, d_index = 0; work_string[s_index]; s_index++) {
+		if((work_string[s_index] == ' ')||(work_string[s_index] == '\t')) {
+			continue;
+		}
+		else {
+			str[d_index++] = work_string[s_index];
+		}
+	}
+	str[d_index] = 0;
+	this->deallocate_long_string(work_string);
+	return str;
+
+}
+
+/*
+ * Split a string into one or more substrings
+ *
+ * Arguments:
+ *
+ * 4. Set the split character to the character used to delimit the substrings.
+ * 3. Substring count (passed by reference) needs to be preset to the maximum size of the substring array of pointers.
+ * 2. Substrings is an array of string pointers which needs to be passed in.
+ * 1. Str is the composite string to split.
+ *
+ * Allocates a long string from the string pool as a working string which is returned by the function.
+ * This will need to be freed by the caller when the substrings are no longer needed.
+ *
+ * Note: str is not modified by this function. A copy is made, and that gets modified.
+ *
+ * Return values:
+ *
+ * 1. Pointer to the modified split string as a long string from the string pool.
+ * 2. The substring count variable passed in (as a pointer) will be modified with the actual number of substrings found.
+ *
+ *
+ *
+ *
+ */
+
+char *Util::str_split(const char *str, char *substrings[], uint32_t &substring_count, char split_char) {
+
+	if((!str) || (!substrings)) {
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
+
+
+	uint32_t max_substrings = substring_count;
+
+	/* We have to have at least 2 as the maximum substring count */
+	if(max_substrings < 2) {
+		POST_ERROR(Err_Handler::EH_INVP);
+
+	}
+
+	/* Make copy of caller's string */
+	char *m_str = this->strdup(str);
+
+	uint32_t start;
+	uint32_t index;
+	uint32_t found;
+
+	for(start=0, index=0, found = 0; (m_str[index]) && (found < max_substrings); index++)  {
+		if(m_str[index] == split_char) {
+			/* Found a delimiter */
+			m_str[index] = 0;
+			/* Save pointer to substring */
+			substrings[found] = m_str + start;
+			/* Skip over terminated string */
+			start = index + 1;
+			/* Bump number of substrings found */
+			found++;
+		}
+	}
+	if(!m_str[index]) {
+		/* Found the end of the string, so add the last substring to the table */
+		substrings[found] = m_str + start;
+		found++;
+	}
+
+
+	substring_count = found;
+	return m_str;
+
+}
+
+/*
+ * Attempt to match a string against a table of strings.
+ * Return -1 if no match found, else return the index of
+ * the match string in the table if there was a match.
+ */
+
+int32_t Util::keyword_match(const char *check_str, const char *match_table[]) {
+	int32_t index;
+	for(index = 0; match_table[index]; index++) {
+		if(!strcmp(check_str, match_table[index])) {
+			break;
+		}
+	}
+	if(!match_table[index]) {
+		index = -1;
+	}
+	return index;
+}
+
+/*
+ * Return true if all of the characters in the string are digits 0-9
+ */
+
+bool Util::is_digits(const char *str) {
+	while(*str) {
+		if((*str < '0') || (*str > '9'))
+			return false;
+		str++;
+	}
+	return true;
+
+}
+
+/*
+ * Return true if the string supplied is a routing table entry
+ */
+bool Util::is_routing_table_entry(const char *str) {
+	bool is_match_str = (*str == '_');
+	if(is_match_str) {
+		str++;
+	}
+	while(*str) {
+		if((*str != 'N') && (*str != 'X')) {
+			if((*str < '0') || (*str > '9')) {
+				return false;
+			}
+		}
+		else {
+			if(!is_match_str) {
+				return false;
+			}
+		}
+		str++;
+	}
+	return true;
+}
+
 
 /*
  * Memset
