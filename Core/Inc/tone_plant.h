@@ -255,6 +255,7 @@ public:
 	void channel_release(int32_t descriptor);
 	uint8_t *allocate_audio_buffer(uint32_t size, const char *name);
 	uint8_t *get_audio_buffer(const char *name, uint32_t *size = NULL);
+	bool audio_buffer_exists(const char *name);
 	uint32_t get_siezed_channels(void) { return this->_busy_bits; };
 
 

@@ -45,6 +45,9 @@ static const Error_Table_Entry Error_table[] = {
 		{ACTION_PANIC, "Configuration file error"},
 		{ACTION_PANIC, "File system error"},
 		{ACTION_PANIC, "Configuration file syntax error"},
+		{ACTION_PANIC, "No memory Available"},
+		{ACTION_PANIC, "No Such file"},
+
 
 
 

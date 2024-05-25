@@ -361,6 +361,7 @@ char *Util::str_split(const char *str, char *substrings[], uint32_t &substring_c
 	/* Make copy of caller's string */
 	char *m_str = this->strdup(str);
 
+
 	uint32_t start;
 	uint32_t index;
 	uint32_t found;

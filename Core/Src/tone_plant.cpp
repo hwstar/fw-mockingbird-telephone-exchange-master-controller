@@ -1339,6 +1339,32 @@ uint8_t  *Tone_Plant::get_audio_buffer(const char *name, uint32_t *size) {
 	return this->_audio_buffer_entries[index].buffer_start;
 }
 
+/*
+ * Return true if an audio buffer name exists
+ */
+
+bool Tone_Plant::audio_buffer_exists(const char *name) {
+	if(!name) {
+		POST_ERROR(Err_Handler::EH_IVD);
+
+	}
+	/* Attempt to locate buffer by name */
+	uint32_t index;
+	for(index = 0; index < AUDIO_BUFFERS_MAX; index++) {
+		if(!strcmp(name, this->_audio_buffer_entries[index].name)) {
+			break;
+		}
+	}
+
+	if(index >= AUDIO_BUFFERS_MAX) {
+		/* Name not found */
+		return false;
+	}
+
+	return true;
+
+}
+
 
 
 

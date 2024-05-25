@@ -45,6 +45,8 @@ enum {
 	EH_CFER=34, /* Configuration file error */
 	EH_FSER=35, /* File system error */
 	EH_CFSE=36, /* Configuration file syntax error */
+	EH_NMA=37, /* No memory Available */
+	EH_NSFL=38, /* No Such file */
 
 	EH_NUM_ERROR_CODES
 };

@@ -2,9 +2,11 @@
 #include "file_io.h"
 #include "logging.h"
 #include "err_handler.h"
+#include "file_io.h"
 #include "config_rw.h"
 #include "util.h"
 #include "pool_alloc.h"
+#include "tone_plant.h"
 #include "connector.h"
 #include "sub_line.h"
 #include "trunk.h"
@@ -17,9 +19,207 @@ namespace Config_RW {
 
 enum {RL_OK = 0, RL_EOF = -1, RL_FS_ERR = -2, RL_TRUNC_LINE = -3};
 
+
 static const char *TAG = "configrw";
 static const char *SWITCH_CONF_FILE = "/config/switch.conf";
+const char *types[] = {"ringing", "receiver_lifted", "dial_tone", "digits_recognized", "trunk_signaling", "called_party_busy", "congestion", NULL};
 
+
+/*
+ * Checks to see that the indications defined are valid
+ */
+
+static bool _indications_callback(const char *section, const char *key, const char *value, uint32_t line_number, void *data) {
+	const char *methods[] = {"none", "precise", "sample", NULL};
+
+	if(!data) {
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
+
+	uint32_t *keyword_bits = (uint32_t *) data;
+
+	/* Split value into substrings */
+	uint32_t substring_count = 3;
+	char *indications_substrings[3];
+
+	if(!value[0]) {
+		Config_rw.syntax_error(line_number, "Missing value(s)");
+	}
+
+	char *alloc_mem = Utility.str_split(value, indications_substrings, substring_count, ',');
+
+	/* Must have one or two substrings only */
+	if((substring_count > 2)) {
+		Utility.deallocate_long_string(alloc_mem);
+
+	}
+
+
+	/* Attempt to match a type keyword */
+	int32_t indication_type = Utility.keyword_match(key, types);
+
+	/* If no type match */
+	if(indication_type == -1) {
+		Utility.deallocate_long_string(alloc_mem);
+		Config_rw.syntax_error(line_number, "Invalid type");
+
+	}
+
+	/* Attempt to match a method keyword */
+	int32_t method = Utility.keyword_match(indications_substrings[0], methods);
+
+	/* If no method match */
+	if(method  == -1) {
+		Utility.deallocate_long_string(alloc_mem);
+		Config_rw.syntax_error(line_number, "Invalid method");
+	}
+
+	/* Verify that the various combinations of type, method, and audio file are valid */
+	bool is_invalid = false;
+
+	switch(indication_type) {
+	case PT_RINGING: /* ringing */
+		/* Valid methods: precise, sample */
+		if(method == 0)
+			is_invalid = true;
+		else if((method == 2) && (substring_count != 2)) {
+			/* No file provided */
+			is_invalid = true;
+		}
+		else {
+			/* Stat and load the file */
+			if((method == 2) &&(!Config_rw.stat_and_load_audio_sample(types[0], indications_substrings[1]))) {
+				is_invalid = true;
+			}
+			else if((method == 0) && substring_count != 1) {
+				is_invalid = true;
+			}
+			else {
+				/* All good */
+				*keyword_bits |= 1;
+			}
+
+		}
+		break;
+
+	case PT_RECEIVER_LIFTED: /* receiver_lifted */
+		/* Valid methods: none, sample */
+		if(method == 1) {
+			is_invalid = true;
+		}
+		else if((method == 2) && (substring_count != 2)) {
+			/* No file provided */
+			is_invalid = true;
+		}
+		else {
+			/* Stat and load the file */
+			if((method == 2) && (!Config_rw.stat_and_load_audio_sample(types[1], indications_substrings[1]))) {
+					is_invalid = true;
+			}
+			else if((method == 0) && substring_count != 1) {
+				is_invalid = true;
+			}
+			else {
+				/* All good */
+				*keyword_bits |= 2;
+			}
+		}
+		break;
+
+	case PT_DIAL_TONE: /* dial tone */
+		/* Valid methods: precise */
+		if((method != 1) || (substring_count != 1)) {
+			is_invalid = true;
+		}
+		else {
+			/* All good */
+			*keyword_bits |= 4;
+		}
+		break;
+
+	case PT_DIGITS_RECOGNIZED: /* digits_recognized */
+		/* Valid methods: none, sample */
+		if(method == 1) {
+			is_invalid = true;
+		}
+		else if((method == 2) && (substring_count != 2)) {
+			/* No file provided */
+			is_invalid = true;
+		}
+		else {
+			/* Stat and load the file */
+			if((method == 2) && (!Config_rw.stat_and_load_audio_sample(types[3], indications_substrings[1]))) {
+					is_invalid = true;
+			}
+			else if((method == 0) && substring_count != 1) {
+				is_invalid = true;
+			}
+			else {
+				/* All good */
+				*keyword_bits |= 8;
+			}
+		}
+		break;
+
+	case PT_TRUNK_SIGNALLING: /* trunk signaling */
+		/* Valid methods: none, sample */
+		if(method == 1) {
+			is_invalid = true;
+		}
+		else if((method == 2) && (substring_count != 2)) {
+			/* No file provided */
+			is_invalid = true;
+		}
+		else {
+			/* Stat and load the file */
+			if((method == 2) &&(!Config_rw.stat_and_load_audio_sample(types[4], indications_substrings[1]))) {
+					is_invalid = true;
+			}
+			else if((method == 0) && substring_count != 1) {
+				is_invalid = true;
+			}
+			else {
+				/* All good */
+				*keyword_bits |= 0x10;
+			}
+		}
+		break;
+
+	case PT_CALLED_PARTY_BUSY: /* called party busy */
+		/* Valid methods: precise */
+		if((method != 1) || (substring_count != 1)) {
+			is_invalid = true;
+		}
+		else {
+			/* All good */
+			*keyword_bits |= 0x20;
+		}
+		break;
+
+
+	case PT_CONGESTION: /* congestion */
+		/* Valid methods: precise */
+		if((method != 1) || (substring_count != 1)) {
+			is_invalid = true;
+		}
+		else {
+			/* All good */
+			*keyword_bits |= 0x40;
+		}
+		break;
+
+
+	default:
+		break;
+	}
+
+	Utility.deallocate_long_string(alloc_mem);
+	if(is_invalid) {
+		Config_rw.syntax_error(line_number, "Invalid method, type, or missing audio file");
+	}
+
+	return true;
+}
 
 /*
  * Checks to see that all of the keys and values in the routing table are valid
@@ -166,8 +366,6 @@ static bool _subscriber_callback(const char *section, const char *key, const cha
 	return true;
 
 }
-
-
 
 /*
  * Check for valid label characters in string
@@ -331,6 +529,7 @@ void Config_RW::_process_line(void) {
 
 }
 
+
 /*
  * Read one line into the line buffer
  */
@@ -375,6 +574,67 @@ int32_t Config_RW::_read_line(void) {
 
 }
 
+/*
+ * Check to see that a sample file exists. If it doesn't then return false.
+ * If it exists, then load it into a named sample buffer and tag it with the sample name.
+ */
+
+bool Config_RW::stat_and_load_audio_sample(const char *sample_name, const char *sample_path) {
+	LOG_INFO(TAG, "Opening audio file: %s", sample_path);
+	int fd = File_io.open(sample_path, File_Io::O_RDONLY);
+	if(fd >= 0) {
+		/* Get file size */
+		uint32_t audio_sample_size = File_io.fsize(fd);
+		/* Attempt buffer allocaiton */
+		uint8_t *buffer = Tone_plant.allocate_audio_buffer(audio_sample_size, sample_name);
+		/* If buffer successfully allocated */
+		if(buffer) {
+			if(File_io.read(fd, buffer, audio_sample_size) != -1) {
+				LOG_INFO(TAG,"Audio sample file loaded successfully");
+			}
+		}
+		else {
+			/* Buffer allocation failed */
+			LOG_ERROR(TAG, "No more space left in audio sample buffer");
+			POST_ERROR(Err_Handler::EH_NMA);
+		}
+		/* Close the file */
+		LOG_INFO(TAG, "Closing the audio file");
+		File_io.close(fd);
+	}
+	else {
+		LOG_ERROR(TAG, "Could not open audio file");
+		POST_ERROR(Err_Handler::EH_NSFL);
+	}
+
+
+
+	return true;
+}
+
+/*
+ * Return the name of a sample buffer if it has been preloaded into memory
+ * otherwise return NULL.
+ */
+
+const char *Config_RW::get_progress_tone_buffer_name(uint32_t pt_type) {
+	if(pt_type >= MAX_PT_TYPE) {
+		POST_ERROR(Err_Handler::EH_INVP);
+	}
+	const char *pt_name = types[pt_type];
+
+	/* See if the buffer name has been preloaded */
+	if(!Tone_plant.audio_buffer_exists(pt_name)){
+		pt_name = NULL;
+	}
+	return pt_name;
+}
+
+
+
+/*
+ * Called after RTOS is up and running
+ */
 
 void Config_RW::init(void) {
 
@@ -450,11 +710,26 @@ void Config_RW::init(void) {
 
 
 	/*
-	 * Check for mandatory sections, then check to see that the sections in them exist
+	 * Check for mandatory sections, then validate the sections.
 	 */
+
+	/* Subscribers section */
 
 	if(!this->traverse_nodes("subscribers", _subscriber_callback)) {
 		this->syntax_error(0,"Subscriber section is missing");
+	}
+
+	/* Incoming trunks section */
+
+	/* Outgoing trunk groups section */
+
+	/* Indications */
+	uint32_t keyword_bits = 0;
+	if(!this->traverse_nodes("indications", _indications_callback, &keyword_bits)) {
+		this->syntax_error(0,"Indications section is missing");
+	}
+	if(keyword_bits != 0x7F) {
+		this->syntax_error(0,"Not all indication types were defined");
 	}
 
 

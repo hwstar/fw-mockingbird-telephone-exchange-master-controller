@@ -14,6 +14,11 @@ const uint32_t LINE_BUFFER_SIZE = 127;
 
 
 enum {VT_OBJECT, VT_STRING, VT_NUMBER, VT_BOOLEAN};
+enum {PT_RINGING=0, PT_RECEIVER_LIFTED=1, PT_DIAL_TONE=2, PT_DIGITS_RECOGNIZED=3,
+	PT_TRUNK_SIGNALLING=4, PT_CALLED_PARTY_BUSY=5, PT_CONGESTION=6,
+
+	MAX_PT_TYPE
+};
 
 /*
  * Data structures
@@ -73,6 +78,8 @@ public:
 	int32_t get_arguments(const char *value, const char *format, ...);
 	bool traverse_nodes(const char *section, Traverse_Nodes_Callback_Type callback=NULL, void *data=NULL);
 	void syntax_error(uint32_t line_num, const char *message = NULL);
+	bool stat_and_load_audio_sample(const char *sample_name, const char *sample_path);
+	const char *get_progress_tone_buffer_name(uint32_t pt_type);
 
 
 

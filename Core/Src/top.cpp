@@ -95,28 +95,6 @@ void Top_init(void) {
 	Card_comm.send_command(Card_Comm::RT_LINE, 6, Sub_Line::REG_POWER_CTRL, true);
 	Card_comm.send_command(Card_Comm::RT_LINE, 7, Sub_Line::REG_POWER_CTRL, true);
 
-	/* Trash code, only for testing */
-	LOG_DEBUG(TAG, "Opening audio file city_ring.ulaw");
-	int fd = File_io.open("/audio/city_ring.ulaw", File_Io::O_RDONLY);
-	if(fd >= 0) {
-		uint32_t city_ring_size = File_io.fsize(fd);
-		uint8_t *buffer = Tone_plant.allocate_audio_buffer(city_ring_size, "city_ring");
-		if(buffer) {
-			if(File_io.read(fd, buffer, city_ring_size) != -1) {
-				LOG_DEBUG(TAG,"city ring loaded for testing purposes");
-			}
-		}
-		else {
-			LOG_ERROR(TAG, "Audio buffer allocation failed");
-		}
-		File_io.close(fd);
-	}
-	else {
-		LOG_ERROR(TAG, "Could not open audio file");
-	}
-
-
-
 	/* Test Code End */
 
 

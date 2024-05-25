@@ -5,6 +5,7 @@
 #include "util.h"
 #include "pool_alloc.h"
 #include "xps_logical.h"
+#include "config_rw.h"
 #include "tone_plant.h"
 #include "mf_receiver.h"
 #include "drv_dtmf.h"
@@ -689,7 +690,15 @@ bool Connector::seize_and_connect_tone_generator(Conn_Info *info, bool orig_term
 
 
 void Connector::send_ringing(Conn_Info *info) {
-	Tone_plant.send_buffer_loop_ulaw(info->tone_plant_descriptor, "city_ring", 0.0);
+	const char *progress_tone_name = Config_rw.get_progress_tone_buffer_name(Config_RW::PT_RINGING);
+	if(progress_tone_name) {
+		LOG_DEBUG(TAG, "Sending sampled ring tone");
+		Tone_plant.send_buffer_loop_ulaw(info->tone_plant_descriptor, progress_tone_name, 0.0);
+	}
+	else {
+		LOG_DEBUG(TAG, "Sending precise ring tone");
+		Tone_plant.send_call_progress_tones(info->tone_plant_descriptor, Tone_Plant::CPT_RINGING);
+	}
 }
 
 /*
