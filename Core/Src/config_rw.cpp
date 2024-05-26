@@ -26,6 +26,196 @@ const char *types[] = {"ringing", "receiver_lifted", "dial_tone", "digits_recogn
 
 
 /*
+ * Function forward declarations
+ */
+
+static bool _routing_table_callback(const char *section, const char *key, const char *value, uint32_t line_number, void *data);
+static bool _phys_trunk_callback(const char *section, const char *key, const char *value, uint32_t line_number, void *data);
+
+/*
+ * Validate a trunk group
+ */
+
+static bool _outgoing_trunk_group(const char *section, const char *key, const char *value, uint32_t line_number, void *data) {
+
+	/* key must be trunk_list */
+	if(strcmp(key, "trunk_list")) {
+		Config_rw.syntax_error(line_number, "Trunk list not defined");
+	}
+
+	/* Value must contain something */
+	if(!value[0]) {
+		Config_rw.syntax_error(line_number, "No trunks defined");
+	}
+
+	/* Split the value into substrings */
+	/* These are the trunk section names */
+
+	char *substrings[4];
+	uint32_t substring_count = 4;
+	char *alloc_mem = Utility.str_split(value, substrings, substring_count, ',');
+	uint32_t keyword_bits = 0;
+
+	for(uint32_t index = 0; index < substring_count; index++) {
+
+		int32_t res = Config_rw.traverse_nodes(value, _phys_trunk_callback, (void *) &keyword_bits);
+		if(res == -1) {
+			Utility.deallocate_long_string(alloc_mem);
+			Config_rw.syntax_error(0, "No physical trunks found");
+		}
+		else if(keyword_bits != 7) {
+			Utility.deallocate_long_string(alloc_mem);
+			Config_rw.syntax_error(0, "Missing required keywords");
+
+		}
+		else {
+			Utility.deallocate_long_string(alloc_mem);
+		}
+	}
+	return true;
+}
+
+
+
+
+/*
+ * Validate outgoing trunk groups
+ */
+
+static bool _outgoing_trunk_groups_callback(const char *section, const char *key, const char *value, uint32_t line_number, void *data) {
+
+	/* key must be trunk_list */
+	if(strcmp(key, "group_list")) {
+		Config_rw.syntax_error(line_number, "Trunk list not defined");
+	}
+
+	/* Value must contain something */
+	if(!value[0]) {
+		Config_rw.syntax_error(line_number, "No trunk groups");
+	}
+
+	/* Split the value into substrings */
+	/* These are the trunk section names */
+
+	char *substrings[8];
+	uint32_t substring_count = 8;
+	char *alloc_mem = Utility.str_split(value, substrings, substring_count, ',');
+
+	for(uint32_t index = 0; index < substring_count; index++) {
+
+		int32_t res = Config_rw.traverse_nodes(value, _outgoing_trunk_group);
+		if(res == -1) {
+			Utility.deallocate_long_string(alloc_mem);
+			Config_rw.syntax_error(0, "No trunk groups found");
+		}
+		else {
+			Utility.deallocate_long_string(alloc_mem);
+		}
+
+	}
+
+	return true;
+}
+
+
+/*
+ * Validates physical trunk sections
+ */
+
+static bool _phys_trunk_callback(const char *section, const char *key, const char *value, uint32_t line_number, void *data) {
+
+	static const char *permitted_keywords[] = {"type", "phys_trunk", "routing_table", NULL};
+
+	if(!data) {
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
+
+	uint32_t *keyword_bits = (uint32_t *) data;
+
+	/* Check for permitted keywords */
+	int32_t keyword_index = Utility.keyword_match(key, permitted_keywords);
+	if(keyword_index == -1) {
+		Config_rw.syntax_error(line_number, "Bad key");
+	}
+	/* For each permitted keyword, set a bit to be checked by the caller */
+	switch(keyword_index) {
+	case 0: /* type */
+		if(strcmp(value, "e&m")) {
+			Config_rw.syntax_error(line_number, "Trunk type must be e&m");
+		}
+
+		*keyword_bits |= 1;
+		break;
+
+	case 1: { /* phys_trunk */
+		unsigned trunk_num;
+		int res = sscanf(value,"%u", &trunk_num);
+			if(res != 1) {
+				Config_rw.syntax_error(line_number, "Physical trunk not a number");
+			}
+		/* Must not exceed the maximum number of trunk cards */
+		if(trunk_num > Trunk::MAX_TRUNK_CARDS) {
+			Config_rw.syntax_error(line_number, "Trunk number exceeds maximum");
+		}
+
+		*keyword_bits |= 2;
+		break;
+	}
+
+
+	case 2:{ /* routing_table */
+		uint32_t equip_type = 2;
+		/* Check the routing table section supplied */
+		int32_t res = Config_rw.traverse_nodes(value, _routing_table_callback, (void *) &equip_type);
+		if(res == false) {
+			Config_rw.syntax_error(line_number, "Routing table not found");
+		}
+		*keyword_bits |= 4;
+		break;
+	}
+
+	default:
+		break;
+
+	}
+
+
+	return true;
+}
+
+
+/*
+ * Validates incoming trunks
+ */
+
+
+static bool _incoming_trunks_callback(const char *section, const char *key, const char *value, uint32_t line_number, void *data) {
+	unsigned key_num;
+	uint32_t keyword_bits = 0;
+	/* Key must be a number */
+	int res = sscanf(key,"%u", &key_num);
+		if(res != 1) {
+			Config_rw.syntax_error(line_number, "Physical trunk not a number");
+		}
+	/* Must not exceed the maximum number of trunk cards */
+	if(key_num > Trunk::MAX_TRUNK_CARDS) {
+		Config_rw.syntax_error(line_number, "Trunk number exceeds maximum");
+	}
+	/* Value check */
+
+	res = Config_rw.traverse_nodes(value, _phys_trunk_callback, (void *) &keyword_bits);
+	if(!res) {
+		Config_rw.syntax_error(line_number, "No physical trunks found");
+	}
+	if(keyword_bits != 7) {
+		Config_rw.syntax_error(0, "Missing required keywords");
+	}
+
+	return true;
+
+}
+
+/*
  * Checks to see that the indications defined are valid
  */
 
@@ -161,7 +351,7 @@ static bool _indications_callback(const char *section, const char *key, const ch
 		}
 		break;
 
-	case PT_TRUNK_SIGNALLING: /* trunk signaling */
+	case PT_TRUNK_SIGNALING: /* trunk signaling */
 		/* Valid methods: none, sample */
 		if(method == 1) {
 			is_invalid = true;
@@ -243,7 +433,7 @@ static bool _routing_table_callback(const char *section, const char *key, const 
 		Utility.deallocate_long_string(alloc_mem);
 		Config_rw.syntax_error(line_number, "Incorrect number of arguments");
 	}
-	/* Must be sub only if equipment type is ET_LINE, and sub or tg if equipment type is ET_TRUNK */
+	/* Must be sub only if equipment type is 2, and sub or tg if equipment type is 1 */
 	if(equip_type == 2) {
 		if(strcmp(routing_table_substrings[0],"sub")) {
 			Utility.deallocate_long_string(alloc_mem);
@@ -356,7 +546,7 @@ static bool _subscriber_callback(const char *section, const char *key, const cha
 	if(res) {
 		if(keyword_bits != 0x8007) {
 			/* Did not see all the required keywords */
-			Config_rw.syntax_error(line_number, "Missing keywords in physical line section");
+			Config_rw.syntax_error(line_number, "Missing required keywords");
 		}
 	}
 	else {
@@ -580,7 +770,7 @@ int32_t Config_RW::_read_line(void) {
  */
 
 bool Config_RW::stat_and_load_audio_sample(const char *sample_name, const char *sample_path) {
-	LOG_INFO(TAG, "Opening audio file: %s", sample_path);
+	LOG_DEBUG(TAG, "Opening audio file: %s", sample_path);
 	int fd = File_io.open(sample_path, File_Io::O_RDONLY);
 	if(fd >= 0) {
 		/* Get file size */
@@ -590,7 +780,7 @@ bool Config_RW::stat_and_load_audio_sample(const char *sample_name, const char *
 		/* If buffer successfully allocated */
 		if(buffer) {
 			if(File_io.read(fd, buffer, audio_sample_size) != -1) {
-				LOG_INFO(TAG,"Audio sample file loaded successfully");
+				LOG_DEBUG(TAG,"Audio sample file loaded successfully");
 			}
 		}
 		else {
@@ -599,7 +789,7 @@ bool Config_RW::stat_and_load_audio_sample(const char *sample_name, const char *
 			POST_ERROR(Err_Handler::EH_NMA);
 		}
 		/* Close the file */
-		LOG_INFO(TAG, "Closing the audio file");
+		LOG_DEBUG(TAG, "Closing the audio file");
 		File_io.close(fd);
 	}
 	else {
@@ -702,35 +892,60 @@ void Config_RW::init(void) {
 	/* Close the config file */
 	File_io.close(this->_fd);
 	LOG_INFO(TAG, "Switch config file closed");
-	/*
-	 * Log config tree usage statistics
-	 */
-	LOG_INFO(TAG, "Used %u sections out of %u available", this->_section_pool.get_num_allocated_objects(), MAX_SECTION_BLOCKS );
-	LOG_INFO(TAG, "Used %u nodes out of %u available", this->_node_pool.get_num_allocated_objects(), MAX_NODE_BLOCKS );
-
 
 	/*
 	 * Check for mandatory sections, then validate the sections.
 	 */
 
 	/* Subscribers section */
-
+	LOG_INFO(TAG, "Validating subscribers section");
 	if(!this->traverse_nodes("subscribers", _subscriber_callback)) {
 		this->syntax_error(0,"Subscriber section is missing");
 	}
 
 	/* Incoming trunks section */
+	LOG_INFO(TAG, "Validating incoming trunks section");
+	if(!this->traverse_nodes("incoming_trunks", _incoming_trunks_callback)) {
+		this->syntax_error(0,"Incoming trunks section is missing");
+	}
 
 	/* Outgoing trunk groups section */
+	LOG_INFO(TAG, "Validating outgoing trunks section");
+	if(!this->traverse_nodes("outgoing_trunk_groups", _outgoing_trunk_groups_callback)) {
+		this->syntax_error(0,"Outgoing trunk groups section is missing");
+	}
+
 
 	/* Indications */
+
 	uint32_t keyword_bits = 0;
+	LOG_INFO(TAG, "Validating indications section");
+
 	if(!this->traverse_nodes("indications", _indications_callback, &keyword_bits)) {
 		this->syntax_error(0,"Indications section is missing");
 	}
 	if(keyword_bits != 0x7F) {
 		this->syntax_error(0,"Not all indication types were defined");
 	}
+
+	LOG_INFO(TAG, "Validation complete");
+
+	/*
+	 * Log config tree usage statistics
+	 */
+	LOG_INFO(TAG, "Used %u sections out of %u available", this->_section_pool.get_num_allocated_objects(), MAX_SECTION_BLOCKS );
+	LOG_INFO(TAG, "Used %u nodes out of %u available", this->_node_pool.get_num_allocated_objects(), MAX_NODE_BLOCKS );
+
+	/*
+	 * Log audio buffer bytes available
+	 */
+	uint32_t usage = Tone_Plant::AUDIO_SAMPLE_BUFFER_POOL_SIZE - Tone_plant.get_audio_buffer_bytes_available();
+	uint32_t usage_percent = (usage * 100)/Tone_Plant::AUDIO_SAMPLE_BUFFER_POOL_SIZE;
+	LOG_INFO(TAG, "Audio buffer bytes used: %u out of %u (%u%%)",
+			usage,
+			Tone_Plant::AUDIO_SAMPLE_BUFFER_POOL_SIZE,
+			usage_percent);
+
 
 
 }

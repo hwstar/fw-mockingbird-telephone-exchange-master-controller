@@ -72,18 +72,6 @@ void Top_init(void) {
 	Conn.init();
 
 
-	/*
-	 * Call configuration methods here
-	 */
-	Sub_line.config();
-	Conn.config();
-
-	/*
-	 * Start processing calls
-	 */
-
-	Event_handler.init();
-
 
 	/* Test Code Begin */
 	Card_comm.send_command(Card_Comm::RT_LINE, 0, Sub_Line::REG_POWER_CTRL, true);
@@ -96,6 +84,20 @@ void Top_init(void) {
 	Card_comm.send_command(Card_Comm::RT_LINE, 7, Sub_Line::REG_POWER_CTRL, true);
 
 	/* Test Code End */
+
+	/*
+	 * Call configuration methods here
+	 */
+	Sub_line.config();
+	Conn.config();
+
+
+	/*
+	 * Start processing calls
+	 */
+
+	Event_handler.init();
+
 
 
 
