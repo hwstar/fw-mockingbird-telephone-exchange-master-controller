@@ -80,7 +80,9 @@ public:
 	void syntax_error(uint32_t line_num, const char *message = NULL);
 	bool stat_and_load_audio_sample(const char *sample_name, const char *sample_path);
 	const char *get_progress_tone_buffer_name(uint32_t pt_type);
-
+	Config_Section_Type *find_section(const char *section_name);
+	Config_Node_Type *find_node(const char *node_name, Config_Node_Type *node_head);
+	Config_Node_Type *find_node(unsigned num, Config_Node_Type *node_head);
 
 
 };

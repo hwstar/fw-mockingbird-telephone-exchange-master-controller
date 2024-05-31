@@ -37,41 +37,62 @@ static bool _phys_trunk_callback(const char *section, const char *key, const cha
  */
 
 static bool _outgoing_trunk_group(const char *section, const char *key, const char *value, uint32_t line_number, void *data) {
+	static const char *keywords[] = {"trunk_list", "start_index", NULL};
 
-	/* key must be trunk_list */
-	if(strcmp(key, "trunk_list")) {
-		Config_rw.syntax_error(line_number, "Trunk list not defined");
+	uint32_t *caller_keyword_bits = (uint32_t *) data;
+	int32_t res = Utility.keyword_match(key, keywords);
+
+	if(!data) {
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
-	/* Value must contain something */
-	if(!value[0]) {
-		Config_rw.syntax_error(line_number, "No trunks defined");
+	switch(res) {
+	case 0: { /* trunk_list */
+		/* Value must contain something */
+		if(!value[0]) {
+			Config_rw.syntax_error(line_number, "No trunks defined");
+		}
+		/* Split the value into substrings */
+		/* These are the trunk section names */
+
+		char *substrings[4];
+		uint32_t substring_count = 4;
+		char *alloc_mem = Utility.str_split(value, substrings, substring_count, ',');
+		uint32_t keyword_bits = 0;
+
+		for(uint32_t index = 0; index < substring_count; index++) {
+
+			int32_t res = Config_rw.traverse_nodes(substrings[index], _phys_trunk_callback, (void *) &keyword_bits);
+			if(res == false) {
+				Utility.deallocate_long_string(alloc_mem);
+				Config_rw.syntax_error(0, "No physical trunks found");
+			}
+			else if(keyword_bits != 7) {
+				Utility.deallocate_long_string(alloc_mem);
+				Config_rw.syntax_error(0, "Missing required keywords");
+
+			}
+
+		}
+		Utility.deallocate_long_string(alloc_mem);
+		*caller_keyword_bits |= 0x8000; /* Indicate we saw the mandatory keyword */
+	}
+		break;
+
+
+	case 1: /* start_index (optional) */
+		if(!value[0]) {
+			Config_rw.syntax_error(line_number, "Missing start index");
+		}
+		break;
+
+	default:
+		Config_rw.syntax_error(line_number, "Bad key");
+		break;
+
+
 	}
 
-	/* Split the value into substrings */
-	/* These are the trunk section names */
-
-	char *substrings[4];
-	uint32_t substring_count = 4;
-	char *alloc_mem = Utility.str_split(value, substrings, substring_count, ',');
-	uint32_t keyword_bits = 0;
-
-	for(uint32_t index = 0; index < substring_count; index++) {
-
-		int32_t res = Config_rw.traverse_nodes(value, _phys_trunk_callback, (void *) &keyword_bits);
-		if(res == -1) {
-			Utility.deallocate_long_string(alloc_mem);
-			Config_rw.syntax_error(0, "No physical trunks found");
-		}
-		else if(keyword_bits != 7) {
-			Utility.deallocate_long_string(alloc_mem);
-			Config_rw.syntax_error(0, "Missing required keywords");
-
-		}
-		else {
-			Utility.deallocate_long_string(alloc_mem);
-		}
-	}
 	return true;
 }
 
@@ -83,6 +104,8 @@ static bool _outgoing_trunk_group(const char *section, const char *key, const ch
  */
 
 static bool _outgoing_trunk_groups_callback(const char *section, const char *key, const char *value, uint32_t line_number, void *data) {
+
+	 uint32_t keyword_bits = 0;
 
 	/* key must be trunk_list */
 	if(strcmp(key, "group_list")) {
@@ -103,17 +126,19 @@ static bool _outgoing_trunk_groups_callback(const char *section, const char *key
 
 	for(uint32_t index = 0; index < substring_count; index++) {
 
-		int32_t res = Config_rw.traverse_nodes(value, _outgoing_trunk_group);
-		if(res == -1) {
+		int32_t res = Config_rw.traverse_nodes(substrings[index], _outgoing_trunk_group, &keyword_bits);
+		if(!res) {
 			Utility.deallocate_long_string(alloc_mem);
 			Config_rw.syntax_error(0, "No trunk groups found");
 		}
-		else {
+
+		if(keyword_bits != 0x8000) {
 			Utility.deallocate_long_string(alloc_mem);
+			Config_rw.syntax_error(0, "Missing required keywords");
 		}
 
 	}
-
+	Utility.deallocate_long_string(alloc_mem);
 	return true;
 }
 
@@ -204,7 +229,7 @@ static bool _incoming_trunks_callback(const char *section, const char *key, cons
 	/* Value check */
 
 	res = Config_rw.traverse_nodes(value, _phys_trunk_callback, (void *) &keyword_bits);
-	if(!res) {
+	if(res == false) {
 		Config_rw.syntax_error(line_number, "No physical trunks found");
 	}
 	if(keyword_bits != 7) {
@@ -763,6 +788,63 @@ int32_t Config_RW::_read_line(void) {
 	return res;
 
 }
+/*
+ * Attempt to find the section name supplied.
+ * If found, then return a pointer to it's section data
+ * if not found, then return NULL
+ */
+
+Config_Section_Type *Config_RW::find_section(const char *section_name) {
+	Config_Section_Type *config_section;
+	for(config_section = this->_section_head; config_section; config_section = config_section->next) {
+		if(!strcmp(config_section->section, section_name)) {
+			break;
+		}
+	}
+	return config_section;
+}
+
+/*
+ * Attempt to find the node name supplied.
+ * If found, then return a pointer to it's section data
+ * if not found, then return NULL
+ */
+
+Config_Node_Type *Config_RW::find_node(const char *node_name, Config_Node_Type *node_head) {
+	Config_Node_Type *config_node;
+	for(config_node = node_head; config_node; config_node = config_node->next) {
+		if(!strcmp(config_node->key, node_name)) {
+			break;
+		}
+	}
+	return config_node;
+
+}
+
+/*
+ * Attempt to find the node key as a number supplied.
+ * If found, then return a pointer to it's section data
+ * if not found, then return NULL
+ */
+
+Config_Node_Type *Config_RW::find_node(unsigned num, Config_Node_Type *node_head) {
+	Config_Node_Type *config_node;
+	unsigned sl_num;
+	for(config_node = node_head; config_node; config_node = config_node->next) {
+		if(sscanf(config_node->key, "%u", &sl_num) != 1) {
+				POST_ERROR(Err_Handler::EH_IPLN);
+			}
+			/* Check to see if we found the node */
+			if(sl_num == num) {
+				break;
+			}
+
+	}
+	return config_node;
+
+}
+
+
 
 /*
  * Check to see that a sample file exists. If it doesn't then return false.
