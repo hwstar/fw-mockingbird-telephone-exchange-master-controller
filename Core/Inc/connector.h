@@ -2,6 +2,7 @@
 #include "top.h"
 #include "xps_logical.h"
 #include "pool_alloc.h"
+#include "config_rw.h"
 
 namespace Connector {
 const uint8_t MAX_DIALED_DIGITS = 15;
@@ -54,7 +55,8 @@ typedef struct Route_Info {
 	uint8_t dest_line_trunk_count;
 	uint8_t dest_phys_lines_trunks[MAX_PHYS_LINE_TRUNK_TABLE];
 	char dialed_number[MAX_DIALED_DIGITS + 1];
-	const Route_Table_Node *route_table_node;
+	const Route_Table_Node *route_table_node; /* This needs to be removed once config is used */
+	Config_RW::Config_Node *rt_head;
 
 
 } Route_Info;
