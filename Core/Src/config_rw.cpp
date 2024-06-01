@@ -844,6 +844,88 @@ Config_Node_Type *Config_RW::find_node(unsigned num, Config_Node_Type *node_head
 
 }
 
+/*
+ * Helper function for find_node_by_path
+ */
+
+Config_Node_Type *Config_RW::_find_node_by_path_helper(const char *section, char **substrings, uint32_t num_substrings, uint32_t index) {
+
+
+	/* Look up the section */
+	Config_Section_Type *section_info = this->find_section(section);
+	if(!section_info) {
+		return NULL; /* Section not found */
+	}
+	Config_Node_Type *res = NULL;
+
+	/* Get the node key referenced by the substring */
+	Config_Node_Type *node = this->find_node(substrings[index], section_info->head);
+	if(!node) {
+		return res; /* Node not found */
+
+	}
+
+	if(index < num_substrings - 1) {
+		/* Not the last substring */
+		res = this->_find_node_by_path_helper(node->value, substrings, num_substrings, ++index);
+	}
+	else {
+		/* Was the last substring */
+		res = node;
+	}
+	return res;
+}
+
+/*
+ * Recursively search for a node from a starting section when given a path
+ * The path name made up of section keys separated by forward slashes.
+ *
+ * If the path can't be found, return NULL, otherwise return a pointer to the node
+ * in the configuration tree.
+ */
+
+Config_Node_Type *Config_RW::find_node_by_path(const char *starting_section, const char *path) {
+
+	if((!starting_section) || (!path)) {
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
+
+	if(!path[0]) {
+		return NULL;
+	}
+
+	/* Look up the starting section */
+	Config_Section_Type *section_info = this->find_section(starting_section);
+
+	if(!section_info) {
+		return NULL; /* Starting section not found */
+	}
+
+	/* Split path on forward slash boundaries */
+	uint32_t num_path_components = 8; /* Maximum number of substrings in the path */
+	uint32_t index = 0;
+	char *substrings[8];
+	char *alloc_str = Utility.str_split(path, substrings, num_path_components, '/');
+	Config_Node_Type *res = NULL;
+	/* First substring is the node key in the section */
+	Config_Node_Type *node = this->find_node(substrings[index], section_info->head);
+	if(node) {
+		/* Desired node found in starting section */
+		if(index < num_path_components - 1) {
+			res = this->_find_node_by_path_helper(node->value, substrings, num_path_components, ++index);
+		}
+		else {
+			/* Did not need to recurse */
+			res = node;
+		}
+	}
+
+
+
+	Utility.deallocate_long_string(alloc_str);
+	return res;
+
+}
 
 
 /*

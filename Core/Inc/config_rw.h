@@ -54,6 +54,7 @@ protected:
 	Config_Node_Type *_add_node(char *key, char *value);
 	int32_t _read_line(void);
 	void _process_line(void);
+	Config_Node_Type *_find_node_by_path_helper(const char *section, char **substrings, uint32_t num_substrings, uint32_t index);
 
 	char _line_buffer[LINE_BUFFER_SIZE + 1];
 	uint8_t _section_memory_pool[sizeof(Config_Section_Type) * MAX_SECTION_BLOCKS];
@@ -83,6 +84,7 @@ public:
 	Config_Section_Type *find_section(const char *section_name);
 	Config_Node_Type *find_node(const char *node_name, Config_Node_Type *node_head);
 	Config_Node_Type *find_node(unsigned num, Config_Node_Type *node_head);
+	Config_Node_Type *find_node_by_path(const char *starting_section, const char *path);
 
 
 };
