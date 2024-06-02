@@ -51,13 +51,14 @@ typedef struct Route_Info {
 	uint8_t state;
 	uint8_t source_equip_type;
 	uint8_t source_phys_line_number;
+	uint8_t dest_dial_start_index;
 	uint8_t dest_equip_type;
 	uint8_t dest_line_trunk_count;
 	uint8_t dest_phys_lines_trunks[MAX_PHYS_LINE_TRUNK_TABLE];
 	char dialed_number[MAX_DIALED_DIGITS + 1];
 	const Route_Table_Node *route_table_node; /* This needs to be removed once config is used */
-	Config_RW::Config_Node *rt_head;
-
+	Config_RW::Config_Node_Type *rt_head;
+	Config_RW::Config_Section_Type *dest_section;
 
 } Route_Info;
 
@@ -88,6 +89,7 @@ typedef struct Conn_Info {
 
 class Connector {
 protected:
+	uint32_t _route_test(const char *dialed_digits, Route_Info *route_info);
 	uint32_t _test_against_route(const char *string_to_test, const char *route_table_entry);
 	uint8_t _routing_pool_memory[MAX_ROUTE_NODES * sizeof(Route_Table_Node)];
 	Pool_Alloc::Pool_Alloc _routing_pool;

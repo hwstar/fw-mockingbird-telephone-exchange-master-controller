@@ -927,7 +927,6 @@ Config_Node_Type *Config_RW::find_node_by_path(const char *starting_section, con
 
 }
 
-
 /*
  * Check to see that a sample file exists. If it doesn't then return false.
  * If it exists, then load it into a named sample buffer and tag it with the sample name.

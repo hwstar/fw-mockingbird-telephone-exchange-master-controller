@@ -101,6 +101,216 @@ uint32_t Connector::_test_against_route(const char *string_to_test, const char *
 }
 
 /*
+ * Test dialed digits against route in configuration tree
+ */
+
+uint32_t Connector::_route_test(const char *dialed_digits, Route_Info *route_info) {
+	if((!dialed_digits) || (!route_info)) {
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
+	if(route_info->state == ROUTE_INVALID) {
+		return ROUTE_INVALID;
+	}
+
+	uint32_t res = ROUTE_INDETERMINATE;
+
+	/* Allocate a working string */
+	char *alloc_str = Utility.allocate_long_string();
+	/* The first time this is called, we need to compute a pointer to the routing table. */
+	/* Once this is done, subsequent calls will use the computed pointer. */
+	if(!route_info->rt_head) {
+		/* Locate the routing table */
+		unsigned pltn = route_info->source_phys_line_number;
+		const char *start_section;
+		snprintf(alloc_str, Util::LONG_STRINGS_SIZE, "%u/routing_table", pltn);
+		switch(route_info->source_equip_type) {
+		case ET_LINE:
+			start_section="subscribers";
+			break;
+
+		case ET_TRUNK:
+			start_section="incoming_trunks";
+			break;
+
+		default:
+			POST_ERROR(Err_Handler::EH_UHC);
+			break;
+		}
+
+		/* Get the node with the routing table information */
+		route_info->rt_head = Config_rw.find_node_by_path(start_section, alloc_str);
+
+		if(!route_info->rt_head) {
+			/* Configuration invalid after being validated at boot up */
+			/* This shouldn't happen, but we catch it here if it does */
+			POST_ERROR(Err_Handler::EH_BRV);
+		}
+	}
+
+	/* Deallocate working string */
+	Utility.deallocate_long_string(alloc_str);
+
+	/* At this point, we have a pointer to the routing table node */
+	/* We now need to test the dialed digits against what is held in the routing table */
+
+	/* Retrieve the route table section header */
+	Config_RW::Config_Section_Type *route_table = Config_rw.find_section(route_info->rt_head->value);
+	if(!route_table) {
+		POST_ERROR(Err_Handler::EH_BRV);
+	}
+	/* Traverse the routing table list and attempt to match the dialed digits */
+	Config_RW::Config_Node_Type *node = route_table->head;
+
+	if(!node) {
+		POST_ERROR(Err_Handler::EH_INVR);
+	}
+
+	for(;node; node = node->next) {
+		/* Compare the key against the dialed digits */
+		res = this->_test_against_route(dialed_digits, node->key);
+		if(res == ROUTE_VALID) {
+			break;
+		}
+	}
+	route_info->state = (uint8_t) res;
+	if(res == ROUTE_VALID) {
+		/* Retrieve the destination information from the route */
+		uint32_t substring_count = 3;
+		char *substrings[3];
+		/* Split value on comma */
+		char *alloc_str = Utility.str_split(node->value, substrings, substring_count, ',');
+		if(substring_count != 2) {
+			POST_ERROR(Err_Handler::EH_INVR);
+		}
+		/* First string is the destination equipment type */
+		/* Second string is the physical line node for lines or */
+		/* a trunk group for trunks */
+		static const char *routing_keywords[] = {"sub", "tg", NULL};
+		switch(Utility.keyword_match(substrings[0], routing_keywords)) {
+		case 0:
+			route_info->dest_equip_type = ET_LINE;
+			break;
+
+		case 1:
+			route_info->dest_equip_type = ET_TRUNK;
+			break;
+
+		default:
+			POST_ERROR(Err_Handler::EH_UHC);
+			break;
+
+		}
+
+		/* Act on destination line/trunk choice */
+
+		if(route_info->dest_equip_type == ET_LINE) {
+			/* Look up the destination line info section head*/
+			Config_RW::Config_Section_Type *dl_section = Config_rw.find_section(substrings[1]);
+			if(!dl_section) {
+				POST_ERROR(Err_Handler::EH_BRV);
+			}
+			/* Destination section points to destination line */
+			route_info->dest_section = dl_section;
+
+			/* Deallocate working string */
+			Utility.deallocate_long_string(alloc_str);
+
+			/* Locate the physical line number for the destination */
+			Config_RW::Config_Node_Type *dl_node = Config_rw.find_node("phys_line", dl_section->head);
+			if(!dl_node) {
+				POST_ERROR(Err_Handler::EH_BRV);
+			}
+			unsigned dest_phys_line_num;
+			if(sscanf(dl_node->value, "%u", &dest_phys_line_num) != 1) {
+				POST_ERROR(Err_Handler::EH_IPLN);
+			}
+			/* Update the routing info with the destination information */
+			route_info->dest_line_trunk_count = 1;
+			route_info->dest_phys_lines_trunks[0] = (uint8_t) dest_phys_line_num;
+			/* Copy dialed digits for reference later */
+			Utility.strncpy_term(route_info->dialed_number, dialed_digits, sizeof(route_info->dialed_number));
+		}
+		else if(route_info->dest_equip_type == ET_TRUNK) {
+			/* Look up the trunk group */
+			Config_RW::Config_Section_Type *tg_section = Config_rw.find_section(substrings[1]);
+			if(!tg_section) {
+				POST_ERROR(Err_Handler::EH_BRV);
+			}
+			/* Destination section points to trunk group */
+			route_info->dest_section = tg_section;
+			/* Deallocate working string */
+			Utility.deallocate_long_string(alloc_str);
+
+			/* Look up mandatory key first */
+			Config_RW::Config_Node_Type *tl_node = Config_rw.find_node("trunk_list", tg_section->head);
+			if(!tl_node) {
+				POST_ERROR(Err_Handler::EH_INVR);
+			}
+			/* Split into substrings to get trunk sections */
+			substring_count = 3;
+			char *alloc_str = Utility.str_split(tl_node->value, substrings, substring_count, ',');
+			/* Look up all physical trunks and add their info to the route table */
+			for(uint32_t i = 0; i < substring_count; i++) {
+				Config_RW::Config_Section_Type *pt_section = Config_rw.find_section(substrings[i]);
+				if(!pt_section) {
+					POST_ERROR(Err_Handler::EH_BRV);
+				}
+				Config_RW::Config_Node_Type *pt_node = Config_rw.find_node("phys_trunk", pt_section->head);
+				if(!pt_node) {
+					POST_ERROR(Err_Handler::EH_INVR);
+				}
+				/* Convert value from char * to number */
+				unsigned dest_phys_trunk_num;
+				if(sscanf(pt_node->value, "%u", &dest_phys_trunk_num) != 1) {
+					POST_ERROR(Err_Handler::EH_IPLN);
+				}
+				/* Add the physical trunk number to the destination trunk table */
+				route_info->dest_phys_lines_trunks[route_info->dest_line_trunk_count] = (uint8_t) dest_phys_trunk_num;
+				/* Increment the destination trunk count */
+				route_info->dest_line_trunk_count++;
+				/* Copy dialed digits for reference later if they weren't stored previously */
+				if(!route_info->dialed_number[0]) {
+					Utility.strncpy_term(route_info->dialed_number, dialed_digits, sizeof(route_info->dialed_number));
+				}
+
+
+			}
+			/* Look up the optional start_index key */
+			Config_RW::Config_Node_Type *si_node = Config_rw.find_node("start_index", tg_section->head);
+			/* If found */
+			if(si_node) {
+				unsigned start_index;
+				if(sscanf(si_node->value, "%u", &start_index) != 1) {
+					POST_ERROR(Err_Handler::EH_IPLN);
+				}
+				route_info->dest_dial_start_index = (uint8_t) start_index;
+			}
+
+			/* Deallocate working string */
+			Utility.deallocate_long_string(alloc_str);
+
+
+		}
+		else {
+			POST_ERROR(Err_Handler::EH_UHC);
+		}
+
+
+
+
+
+
+	} /* Endif route valid */
+
+
+	return res;
+
+
+}
+
+
+
+/*
  * Called once after RTOS is initialized
  */
 
@@ -138,6 +348,22 @@ void Connector::init(void) {
 			incoming_trunk_route_table_entries[index].match_string
 			);
 	}
+
+	/* DEBUG: Test code: Remove */
+
+	static Route_Info route_info;
+	route_info.state = ROUTE_INDETERMINATE;
+	route_info.source_equip_type = ET_LINE;
+	route_info.source_phys_line_number = 0;
+	route_info.dest_equip_type = ET_UNDEF;
+	route_info.dest_line_trunk_count = 0;
+
+	this->_route_test("2980000", &route_info);
+
+
+
+	/* End test code */
+
 }
 
 /*
@@ -218,11 +444,10 @@ void Connector::prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32
 	conn_info->peer = NULL;
 
 	/* Configure initial routing info */
+	Utility.memset(&conn_info->route_info, 0, sizeof(conn_info->route_info));
 	conn_info->route_info.state = ROUTE_INDETERMINATE;
 	conn_info->route_info.source_equip_type = source_equip_type;
 	conn_info->route_info.source_phys_line_number = source_phys_line_number;
-	conn_info->route_info.dest_equip_type = ET_UNDEF;
-	conn_info->route_info.dest_line_trunk_count = 0;
 }
 
 
