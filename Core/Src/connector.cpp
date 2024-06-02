@@ -348,22 +348,6 @@ void Connector::init(void) {
 			incoming_trunk_route_table_entries[index].match_string
 			);
 	}
-
-	/* DEBUG: Test code: Remove */
-
-	static Route_Info route_info;
-	route_info.state = ROUTE_INDETERMINATE;
-	route_info.source_equip_type = ET_LINE;
-	route_info.source_phys_line_number = 0;
-	route_info.dest_equip_type = ET_UNDEF;
-	route_info.dest_line_trunk_count = 0;
-
-	this->_route_test("2980000", &route_info);
-
-
-
-	/* End test code */
-
 }
 
 /*
