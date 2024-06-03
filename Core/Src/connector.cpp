@@ -19,37 +19,7 @@ namespace Connector {
 
 const char *TAG = "connector";
 
-/* Todo: Can't be hard coded in real implementation */
 
-static const Route_Table_Entry line_route_table_entries[] = {
-{"2980400", ET_LINE, 0, 0, 1, {0}},
-{"2980401", ET_LINE, 0, 0, 1, {1}},
-{"2980402", ET_LINE, 0, 0, 1, {2}},
-{"2980403", ET_LINE, 0, 0, 1, {3}},
-{"2980404", ET_LINE, 0, 0, 1, {4}},
-{"2980405", ET_LINE, 0, 0, 1, {5}},
-{"2980406", ET_LINE, 0, 0, 1, {6}},
-{"2980407", ET_LINE, 0, 0, 1, {7}},
-{"_298XXXX", ET_TRUNK,0, 0, 2, {2,1}},
-
-{"", ET_UNDEF, 0, 0, 0, {0}}, /* Marks the end of the route table */
-
-};
-
-
-static const Route_Table_Entry incoming_trunk_route_table_entries[] = {
-{"80400", ET_LINE, 0, 0, 1, {0}},
-{"80401", ET_LINE, 0, 0, 1, {1}},
-{"80402", ET_LINE, 0, 0, 1, {2}},
-{"80403", ET_LINE, 0, 0, 1, {3}},
-{"80404", ET_LINE, 0, 0, 1, {4}},
-{"80405", ET_LINE, 0, 0, 1, {5}},
-{"80406", ET_LINE, 0, 0, 1, {6}},
-{"80407", ET_LINE, 0, 0, 1, {7}},
-
-{"", ET_UNDEF, 0, 0, 0, {0}}, /* Marks the end of the route table */
-
-};
 
 /*
  * Test the digits currently received against a route table entry
@@ -169,6 +139,7 @@ uint32_t Connector::_route_test(const char *dialed_digits, Route_Info *route_inf
 		/* Compare the key against the dialed digits */
 		res = this->_test_against_route(dialed_digits, node->key);
 		if(res == ROUTE_VALID) {
+			LOG_DEBUG("Valid route: %s", dialed_digits);
 			break;
 		}
 	}
@@ -229,6 +200,7 @@ uint32_t Connector::_route_test(const char *dialed_digits, Route_Info *route_inf
 			route_info->dest_phys_lines_trunks[0] = (uint8_t) dest_phys_line_num;
 			/* Copy dialed digits for reference later */
 			Utility.strncpy_term(route_info->dialed_number, dialed_digits, sizeof(route_info->dialed_number));
+			LOG_DEBUG(TAG, "Route table updated for line destination");
 		}
 		else if(route_info->dest_equip_type == ET_TRUNK) {
 			/* Look up the trunk group */
@@ -289,7 +261,7 @@ uint32_t Connector::_route_test(const char *dialed_digits, Route_Info *route_inf
 			/* Deallocate working string */
 			Utility.deallocate_long_string(alloc_str);
 
-
+			LOG_DEBUG(TAG, "Route table updated for trunk destination");
 		}
 		else {
 			POST_ERROR(Err_Handler::EH_UHC);
@@ -316,38 +288,6 @@ uint32_t Connector::_route_test(const char *dialed_digits, Route_Info *route_inf
 
 void Connector::init(void) {
 
-
-	 /* Initialize the route table memory pool */
-	this->_routing_pool.pool_init(this->_routing_pool_memory, sizeof(Route_Table_Node), MAX_ROUTE_NODES);
-
-	/*
-	 * Temporary code to get things initialized
-	 * Todo: Remove
-	 */
-
-	/* Create the line routing table */
-	for(int index = 0; line_route_table_entries[index].match_string[0]; index++) {
-		/* Add the route */
-		this->add_route(0, line_route_table_entries[index].dest_equip_type,
-			line_route_table_entries[index].phys_line_trunk_count,
-			line_route_table_entries[index].trunk_addressing_start,
-			line_route_table_entries[index].trunk_addressing_end,
-			line_route_table_entries[index].phys_lines_trunks,
-			line_route_table_entries[index].match_string
-			);
-	}
-
-	/* Create the incoming trunk routing table */
-	for(int index = 0; incoming_trunk_route_table_entries[index].match_string[0]; index++) {
-		/* Add the route */
-		this->add_route(1, incoming_trunk_route_table_entries[index].dest_equip_type,
-			incoming_trunk_route_table_entries[index].phys_line_trunk_count,
-			line_route_table_entries[index].trunk_addressing_start,
-			line_route_table_entries[index].trunk_addressing_end,
-			incoming_trunk_route_table_entries[index].phys_lines_trunks,
-			incoming_trunk_route_table_entries[index].match_string
-			);
-	}
 }
 
 /*
@@ -358,55 +298,6 @@ void Connector::init(void) {
 
 void Connector::config() {
 
-}
-
-/*
- * Add a route to a routing table
- */
-bool Connector::add_route(uint32_t table_number, uint32_t dest_equip_type, uint32_t phys_line_trunk_count,
-		uint32_t trunk_addressing_start, uint32_t trunk_addressing_end, const uint8_t *dest_phys_lines_trunks, const char *match_string ) {
-
-	if(table_number >= MAX_ROUTE_TABLES) {
-		POST_ERROR(Err_Handler::EH_INVP);
-	}
-	if((dest_phys_lines_trunks == NULL)||(match_string == NULL)) {
-		POST_ERROR(Err_Handler::EH_NPFA);
-	}
-
-	Route_Table_Node *rtn_new = (Route_Table_Node *) this->_routing_pool.allocate_object();
-
-	if(!rtn_new) {
-		LOG_ERROR(TAG, "Route table full");
-		return false;
-	}
-
-	/* Copy the route data */
-	rtn_new->dest_equip_type = dest_equip_type;
-	rtn_new->phys_line_trunk_count = phys_line_trunk_count;
-	rtn_new->trunk_addressing_start = trunk_addressing_start;
-	rtn_new->trunk_addressing_end = trunk_addressing_end;
-	memcpy(rtn_new->phys_lines_trunks, dest_phys_lines_trunks, MAX_PHYS_LINE_TRUNK_TABLE);
-	Utility.strncpy_term(rtn_new->match_string, match_string, MAX_DIALED_DIGITS + 1);
-
-	/* Set up the list pointers */
-	if(!this->_route_table_heads[table_number]) {
-		/* First insert */
-		this->_route_table_heads[table_number] = rtn_new;
-		this->_route_table_tails[table_number] = rtn_new;
-		rtn_new->prev = NULL;
-		rtn_new->next = NULL;
-
-	}
-	else {
-		/* Subsequent insert */
-		this->_route_table_tails[table_number]->next = rtn_new;
-		rtn_new->prev = this->_route_table_tails[table_number];
-		rtn_new->next = NULL;
-		this->_route_table_tails[table_number] = rtn_new;
-
-	}
-
-	return true;
 }
 
 
@@ -443,39 +334,9 @@ void Connector::prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32
 
 
 uint32_t Connector::test(Conn_Info *conn_info, const char *digits_received) {
-	uint32_t res = ROUTE_INDETERMINATE;
 
-	if((conn_info == NULL) || (digits_received == NULL)) {
-		POST_ERROR(Err_Handler::EH_NPFA);
-	}
-	Route_Info *ri = &conn_info->route_info;
+	uint32_t res = this->_route_test(digits_received, &conn_info->route_info);
 
-	uint32_t rtn_res = ROUTE_INDETERMINATE;
-	Route_Table_Node *rtn;
-	ri->route_table_node = NULL;
-	/* Traverse through the routing table */
-	rtn = this->_route_table_heads[conn_info->route_table_number];
-	if(rtn == NULL) {
-		return ROUTE_INVALID;
-	}
-	while(rtn) {
-		rtn_res = this->_test_against_route(digits_received, rtn->match_string);
-		if(rtn_res == ROUTE_VALID) {
-			/* Note the matching route table node */
-			ri->route_table_node = rtn;
-			/* Note the dialed digits matching the route */
-			Utility.strncpy_term(ri->dialed_number, digits_received, MAX_DIALED_DIGITS + 1 );
-			res = ROUTE_VALID;
-			break;
-		}
-		rtn = rtn->next;
-	}
-	/* If we searched all routes and didn't find a match, then the dialed digits aren't valid */
-	if(rtn_res == ROUTE_INVALID) {
-		res = ROUTE_INVALID;
-	}
-
-	ri->state = res;
 	return res;
 }
 
@@ -505,13 +366,6 @@ uint32_t Connector::resolve(Conn_Info *conn_info) {
 		return (ri->state = ROUTE_INVALID);
 	}
 	uint32_t res = ROUTE_DEST_CONNECTED;
-
-	/* Copy the information from the route table entry to the route info data */
-	conn_info->route_info.dest_equip_type = conn_info->route_info.route_table_node->dest_equip_type;
-	conn_info->route_info.dest_line_trunk_count = conn_info->route_info.route_table_node->phys_line_trunk_count;
-	memcpy(conn_info->route_info.dest_phys_lines_trunks,
-			conn_info->route_info.route_table_node->phys_lines_trunks,
-			MAX_PHYS_LINE_TRUNK_TABLE);
 
 	conn_info->trunk_index = 0; /* Select the first trunk */
 	/* Try to seize it */

@@ -502,8 +502,8 @@ void Sub_Line::poll(void) {
 		Conn.disconnect_caller_party_audio(linfo);
 		/* Everything should be off of the junctor now */
 		/* Prepare the address info */
-		uint8_t start = linfo->route_info.route_table_node->trunk_addressing_start;
-		uint8_t end = linfo->route_info.route_table_node->trunk_addressing_end;
+		uint8_t start = linfo->route_info.dest_dial_start_index + 1;
+		uint8_t end = strlen(linfo->route_info.dialed_number);
 
 		/* Make the trunk dial string */
 		Utility.make_trunk_dial_string(linfo->trunk_outgoing_address, linfo->route_info.dialed_number, start, end,

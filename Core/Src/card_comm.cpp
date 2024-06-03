@@ -151,8 +151,8 @@ bool Card_Comm::send_command(uint32_t resource_type, uint32_t resource, uint32_t
 		}
 	}
 
-	//LOG_DEBUG(TAG, "Sending command %u to resourse %u, resource type %u, parameter %u",
-	//			command, resource, resource_type, parameter);
+	/* LOG_DEBUG(TAG, "Sending command %u to resourse %u, resource type %u, parameter %u",
+				command, resource, resource_type, parameter); */
 	/* Get the lock */
 	osStatus status = osMutexAcquire(this->_lock, osWaitForever);
 

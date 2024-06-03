@@ -26,27 +26,6 @@ enum {PMR_NOP=0, PMR_OK=1, PMR_BUSY=2, PMR_TRUNK_BUSY=3};
 typedef void (*Conn_Handler_Type)(uint32_t event, uint32_t equip_type, uint32_t phys_line_trunk_num);
 
 
-typedef struct Route_Table_Entry {
-	char match_string[MAX_DIALED_DIGITS + 1];
-	uint8_t dest_equip_type;
-	uint8_t trunk_addressing_start;
-	uint8_t trunk_addressing_end;
-	uint8_t phys_line_trunk_count;
-	uint8_t phys_lines_trunks[MAX_PHYS_LINE_TRUNK_TABLE];
-} Route_Table_Entry;
-
-typedef struct Route_Table_Node {
-	char match_string[MAX_DIALED_DIGITS + 1];
-	uint8_t dest_equip_type;
-	uint8_t trunk_addressing_start;
-	uint8_t trunk_addressing_end;
-	uint8_t phys_line_trunk_count;
-	uint8_t phys_lines_trunks[MAX_PHYS_LINE_TRUNK_TABLE];
-	struct Route_Table_Node *prev;
-	struct Route_Table_Node *next;
-}Route_Table_Node;
-
-
 typedef struct Route_Info {
 	uint8_t state;
 	uint8_t source_equip_type;
@@ -56,7 +35,6 @@ typedef struct Route_Info {
 	uint8_t dest_line_trunk_count;
 	uint8_t dest_phys_lines_trunks[MAX_PHYS_LINE_TRUNK_TABLE];
 	char dialed_number[MAX_DIALED_DIGITS + 1];
-	const Route_Table_Node *route_table_node; /* This needs to be removed once config is used */
 	Config_RW::Config_Node_Type *rt_head;
 	Config_RW::Config_Section_Type *dest_section;
 
@@ -91,10 +69,7 @@ class Connector {
 protected:
 	uint32_t _route_test(const char *dialed_digits, Route_Info *route_info);
 	uint32_t _test_against_route(const char *string_to_test, const char *route_table_entry);
-	uint8_t _routing_pool_memory[MAX_ROUTE_NODES * sizeof(Route_Table_Node)];
 	Pool_Alloc::Pool_Alloc _routing_pool;
-	Route_Table_Node *_route_table_heads[MAX_ROUTE_TABLES];
-	Route_Table_Node *_route_table_tails[MAX_ROUTE_TABLES];
 public:
 
 	void init(void);

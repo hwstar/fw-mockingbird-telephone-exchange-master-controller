@@ -47,7 +47,7 @@ void Event::init(void) {
 			NULL,
 			0,
 			NULL,
-			1024,
+			2048,
 			osPriorityHigh,
 			0,
 			0
