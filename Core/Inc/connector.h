@@ -74,9 +74,6 @@ public:
 
 	void init(void);
 	void config();
-	bool add_route(uint32_t table_number, uint32_t dest_equip_type, uint32_t phys_line_trunk_count,
-			uint32_t trunk_addressing_start, uint32_t trunk_addressing_end, const uint8_t *dest_phys_lines_trunks, const char *match_string );
-
 	void prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32_t source_phys_line_number);
 	uint32_t test(Conn_Info *conn_info, const char *digits_received);
 	uint32_t resolve(Conn_Info *conn_info);
@@ -106,6 +103,7 @@ public:
 	void send_busy(Conn_Info *info);
 	void send_congestion(Conn_Info *info);
 	void release_called_party(Conn_Info *info);
+	const char *get_digits_recognized_buffer_name(void);
 
 };
 

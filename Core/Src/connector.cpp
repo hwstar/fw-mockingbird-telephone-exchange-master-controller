@@ -749,6 +749,19 @@ bool Connector::seize_and_connect_tone_generator(Conn_Info *info, bool orig_term
 }
 
 /*
+ * Return true if we need to send a sound sample for digits recognized
+ */
+
+
+const char *Connector::get_digits_recognized_buffer_name(void) {
+
+
+	const char *progress_tone_name = Config_rw.get_progress_tone_buffer_name(Config_RW::PT_DIGITS_RECOGNIZED);
+	return progress_tone_name;
+
+}
+
+/*
  * Send ringing call progress tones
  */
 
