@@ -28,6 +28,32 @@ static const osMutexAttr_t lock_mutex_attr = {
 	0U
 };
 
+/*
+ * Tone complete callback
+ */
+
+static void __tone_complete_callback(uint32_t channel_number, void *data) {
+	Sub_line._tone_complete_callback(channel_number, data);
+
+}
+
+void Sub_Line::_tone_complete_callback(uint32_t channel_number, void *data) {
+	if(!data) {
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
+	Connector::Conn_Info *linfo = (Connector::Conn_Info *) data;
+
+	switch(linfo->state) {
+	case LS_WAIT_FOR_DR_SAMPLE:
+		linfo->state = LS_CALL_SETUP;
+		break;
+
+	default:
+		break;
+	}
+}
+
+
 
 /*
  * DTMF receiver callback
@@ -81,6 +107,10 @@ void Sub_Line::_dial_timer_callback(void *arg) {
 		linfo->state = LS_ORIG_DISCONNECT_F;
 		break;
 
+	case LS_WAIT_BEFORE_DR_SAMPLE:
+		linfo->state = LS_SETUP_DR_SAMPLE;
+		break;
+
 
 	}
 	osMutexRelease(this->_lock); /* Release the lock */
@@ -112,6 +142,11 @@ void Sub_Line::event_handler(uint32_t event_type, uint32_t resource) {
 		case LS_SEIZE_DTMFR:
 		case LS_WAIT_FIRST_DIGIT:
 		case LS_WAIT_ROUTE:
+		case LS_TEST_FOR_DR_SAMPLE:
+		case LS_WAIT_BEFORE_DR_SAMPLE:
+		case LS_SETUP_DR_SAMPLE:
+		case LS_WAIT_FOR_DR_SAMPLE:
+		case LS_CALL_SETUP:
 		case LS_DIAL_TIMEOUT:
 		case LS_SEND_BUSY:
 		case LS_SEND_CONGESTION:
@@ -420,46 +455,77 @@ void Sub_Line::poll(void) {
 			osTimerStop(linfo->dial_timer);
 			/* Release the DTMF Receiver */
 			Conn.release_dtmf_receiver(linfo);
-			/* Resolve the call */
-			switch(Conn.resolve(linfo)) {
-
-			case Connector::ROUTE_INVALID:
-				linfo->state = LS_SEND_CONGESTION;
-				break;
-
-			case Connector::ROUTE_DEST_CONNECTED:
-				{
-					uint32_t equip_type = Conn.get_called_equip_type(linfo);
-					/* Todo: move to connector */
-					if(equip_type == Connector::ET_LINE) {
-						/* Send ringing */
-						Conn.send_ringing(linfo);
-						linfo->state = LS_WAIT_ANSWER;
-					} else if(equip_type == Connector::ET_TRUNK) {
-						linfo->state = LS_WAIT_TRUNK_RESPONSE;
-					}
-				}
-
-
-				break;
-
-			case Connector::ROUTE_DEST_BUSY:
-				linfo->state = LS_SEND_BUSY;
-				break;
-
-			case Connector::ROUTE_DEST_TRUNK_BUSY:
-				LOG_DEBUG(TAG, "Trunk busy returned by Conn.resolve()");
-				linfo->state = LS_TRUNK_ADVANCE;
-				break;
-
-			default:
-				POST_ERROR(Err_Handler::EH_UHC);
-				break;
-			}
+			linfo->state = LS_TEST_FOR_DR_SAMPLE;
+			break;
 		}
 		break;
 
+	case LS_TEST_FOR_DR_SAMPLE: /* Caller perspective */
+		/* Test for digits recognized sample */
+		if(!Conn.get_digits_recognized_buffer_name()) {
+			linfo->state = LS_CALL_SETUP;
+		}
+		else {
+			linfo->state = LS_WAIT_BEFORE_DR_SAMPLE;
+			osTimerStart(linfo->dial_timer, DIGITS_RECOGNIZED_DELAY);
+		}
 
+	case LS_WAIT_BEFORE_DR_SAMPLE: /* Caller perspective */
+		/* Wait for timer to expire */
+		break;
+
+	case LS_SETUP_DR_SAMPLE: /* Caller perspective */
+		/* Set up the digits recognized audio sample */
+		static const char *buffer_name = Conn.get_digits_recognized_buffer_name();
+		linfo->state = LS_WAIT_FOR_DR_SAMPLE;
+		if(!Tone_plant.send_buffer_ulaw(linfo->tone_plant_descriptor, buffer_name, __tone_complete_callback, linfo, 0.0)) {
+			POST_ERROR(Err_Handler::EH_INVR);
+		}
+
+		break;
+
+	case LS_WAIT_FOR_DR_SAMPLE:
+		/* Wait for Digits recognized sample to finish */
+		break;
+
+
+	case LS_CALL_SETUP: /* Caller perspective */
+		/* Resolve the call */
+		switch(Conn.resolve(linfo)) {
+
+		case Connector::ROUTE_INVALID:
+			linfo->state = LS_SEND_CONGESTION;
+			break;
+
+		case Connector::ROUTE_DEST_CONNECTED:
+			{
+				uint32_t equip_type = Conn.get_called_equip_type(linfo);
+				/* Todo: move to connector */
+				if(equip_type == Connector::ET_LINE) {
+					/* Send ringing */
+					Conn.send_ringing(linfo);
+					linfo->state = LS_WAIT_ANSWER;
+				} else if(equip_type == Connector::ET_TRUNK) {
+					linfo->state = LS_WAIT_TRUNK_RESPONSE;
+				}
+			}
+
+
+			break;
+
+		case Connector::ROUTE_DEST_BUSY:
+			linfo->state = LS_SEND_BUSY;
+			break;
+
+		case Connector::ROUTE_DEST_TRUNK_BUSY:
+			LOG_DEBUG(TAG, "Trunk busy returned by Conn.resolve()");
+			linfo->state = LS_TRUNK_ADVANCE;
+			break;
+
+		default:
+			POST_ERROR(Err_Handler::EH_UHC);
+			break;
+		}
 
 
 	case LS_WAIT_TRUNK_RESPONSE: /* Caller perspective */

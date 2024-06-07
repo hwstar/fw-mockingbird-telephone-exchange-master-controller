@@ -6,6 +6,7 @@ namespace Sub_Line {
 
 const uint32_t DTMF_DIGIT_DIAL_TIME = 30000; /* 30 seconds */
 const uint32_t CONGESTION_SEND_TIME = 30000; /* 30 Seconds */
+const uint32_t DIGITS_RECOGNIZED_DELAY = 125; /* 1/8 second */
 
 const uint8_t MAX_DUAL_LINE_CARDS = 4;
 const uint8_t LINE_CARD_I2C_ADDRESS = 0x30;
@@ -26,7 +27,8 @@ enum {LS_IDLE=0, LS_SEIZE_JUNCTOR=1, LS_SEIZE_TG=2, LS_SEIZE_DTMFR=3, LS_WAIT_FI
 	LS_ORIG_DISCONNECT_F=19, LS_FAR_END_DISCONNECT=20, LS_FAR_END_DISCONNECT_B=21, LS_END_CALL=22,
 	LS_WAIT_HANGUP=23, LS_RING=24, LS_RINGING=25, LS_ANSWER=26, LS_ANSWERED=27, LS_SEIZE_TRUNK=28,
 	LS_WAIT_TRUNK_RESPONSE=29, LS_TRUNK_OUTGOING_RELEASE=30, LS_TRUNK_SEND_ADDR_INFO = 31, LS_TRUNK_WAIT_ADDR_SENT=32,
-	LS_TRUNK_CONNECT_CALLER=33, LS_TRUNK_WAIT_SUPV=34, LS_TRUNK_ADVANCE=35, LS_RESET=255};
+	LS_TRUNK_CONNECT_CALLER=33, LS_TRUNK_WAIT_SUPV=34, LS_TRUNK_ADVANCE=35, LS_TEST_FOR_DR_SAMPLE=36,
+	LS_WAIT_BEFORE_DR_SAMPLE=37, LS_SETUP_DR_SAMPLE=38, LS_WAIT_FOR_DR_SAMPLE=39, LS_CALL_SETUP=40, LS_RESET=255};
 
 
 class Sub_Line {
@@ -46,6 +48,7 @@ public:
 	void poll(void);
 	uint32_t peer_message_handler(Connector::Conn_Info *conn_info, uint32_t phys_line_trunk_number, uint32_t message);
 	void _dial_timer_callback(void *arg);
+	void _tone_complete_callback(uint32_t channel_number, void *data);
 
 };
 

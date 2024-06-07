@@ -642,11 +642,11 @@ void Tone_Plant::worker(void) {
 				case AS_SEND_AUDIO_WAIT_ULAW:
 					if(ch_info->state == AS_SEND_AUDIO_WAIT) {
 						/* Signed linear */
-						buffer[i] = ch_info->audio_sample_halfwords[ch_info->audio_sample_index++];
+						buffer[i] = this->_set_gain(ch_info, ch_info->audio_sample_halfwords[ch_info->audio_sample_index++]);
 					}
 					else {
 						/* ULAW */
-						buffer[i] = this->_ulaw2slin13(ch_info->audio_sample_bytes[ch_info->audio_sample_index++]);
+						buffer[i] = this->_set_gain(ch_info, this->_ulaw2slin13(ch_info->audio_sample_bytes[ch_info->audio_sample_index++]));
 
 					}
 					if(ch_info->audio_sample_index >= ch_info->audio_sample_size) {
