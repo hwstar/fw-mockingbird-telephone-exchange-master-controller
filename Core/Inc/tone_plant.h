@@ -11,8 +11,11 @@ enum {AS_IDLE=0,
 	AS_SEND_MF, AS_SEND_MF_WAIT_TONE_END, AS_SEND_MF_WAIT_SILENCE_END,
 	AS_SEND_DTMF, AS_SEND_DTMF_WAIT_TONE_END, AS_SEND_DTMF_WAIT_SILENCE_END,
 	AS_SEND_AUDIO, AS_SEND_AUDIO_WAIT, AS_SEND_AUDIO_LOOP, AS_SEND_AUDIO_LOOP_WAIT,
-	AS_SEND_AUDIO_ULAW, AS_SEND_AUDIO_WAIT_ULAW, AS_SEND_AUDIO_LOOP_ULAW, AS_SEND_AUDIO_LOOP_WAIT_ULAW
+	AS_SEND_AUDIO_ULAW, AS_SEND_AUDIO_WAIT_ULAW, AS_SEND_AUDIO_LOOP_ULAW, AS_SEND_AUDIO_LOOP_WAIT_ULAW,
+	AS_NEXT_SEQUENCE_ITEM, AS_SEQUENCE_ITEM
 };
+
+enum {ASEQ_CMD_END=0, ASEQ_CMD_SEND_ULAW=1, ASEQ_CMD_SEND_CPT=2};
 
 enum {CPT_DIAL_TONE=0, CPT_BUSY, CPT_CONGESTION, CPT_RINGING, CPT_MAX};
 
@@ -53,6 +56,12 @@ const uint32_t AUDIO_BUFFER_ENTRY_NAME_SIZE = 32;
 const uint8_t AUDIO_BUFFERS_MAX = 8;
 
 /*
+ * Types
+ */
+
+typedef void (*Tone_Plant_Callback_Type)(uint32_t channel_number, void *data);
+
+/*
  * Data structures
  */
 
@@ -80,6 +89,16 @@ typedef struct saiData {
 	int16_t dma_buffer[BUFFER_SIZE];
 }saiData;
 
+typedef struct Audio_Sequence_List_Type {
+	uint8_t command;
+	bool loop;
+	float level;
+	Tone_Plant_Callback_Type *callback;
+	void *data;
+	uint8_t cpt_type;
+	const char *buffer_name;
+} Audio_Sequence_List_Type;
+
 
 /* Channel-specific data */
 
@@ -105,8 +124,12 @@ typedef struct channelInfo {
 	size_t digit_string_index;
 	const int16_t *audio_sample_halfwords;
 	const uint8_t *audio_sample_bytes;
+	const Audio_Sequence_List_Type *sequence;
 
 } channelInfo;
+
+
+
 
 typedef struct Indications {
 	struct Dial_Tone {
@@ -241,11 +264,11 @@ public:
 	void setup(void);
 	void init(void);
 	void send_call_progress_tones(uint32_t channel_number, uint8_t type);
-	void send_mf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number, void *data), void *data = NULL);
-	void send_dtmf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number, void *data), void *data = NULL);
-	void send(int32_t descriptor, const int16_t *samples, uint32_t length, void (*callback)(uint32_t channel_number, void *data), void *data = NULL, float level = 0.0);
-	void send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t length, void (*callback)(uint32_t channel_number, void *data), void *data = NULL, float level = 0.0);
-	bool send_buffer_ulaw(int32_t descriptor, const char *buffer_name, void (*callback)(uint32_t channel_number, void *data), void *data = NULL, float level = 0.0);
+	void send_mf(int32_t descriptor, const char *digit_string, Tone_Plant_Callback_Type callback, void *data = NULL);
+	void send_dtmf(int32_t descriptor, const char *digit_string, Tone_Plant_Callback_Type callback, void *data = NULL);
+	void send(int32_t descriptor, const int16_t *samples, uint32_t length, Tone_Plant_Callback_Type callback, void *data = NULL, float level = 0.0);
+	void send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t length, Tone_Plant_Callback_Type callback, void *data = NULL, float level = 0.0);
+	bool send_buffer_ulaw(int32_t descriptor, const char *buffer_name, Tone_Plant_Callback_Type callback, void *data = NULL, float level = 0.0);
 	void send_loop(int32_t descriptor, const int16_t *samples, uint32_t length, float level = 0.0);
 	void send_loop_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t length, float level = 0.0);
 	bool send_buffer_loop_ulaw(int32_t descriptor, const char *buffer_name, float level = 0.0);
@@ -258,6 +281,7 @@ public:
 	bool audio_buffer_exists(const char *name);
 	uint32_t get_audio_buffer_bytes_available(void) {return this->_audio_buffer_info.bytes_available;};
 	uint32_t get_siezed_channels(void) { return this->_busy_bits; };
+	void send_audio_sequence(int32_t descriptor, const Audio_Sequence_List_Type *audio_sequence_list);
 
 
 
@@ -276,6 +300,10 @@ protected:
 	void _generate_dual_tone(channelInfo *channel_info, float freq1, float freq2, float db_level1, float db_level2);
 	int16_t _next_tone_value(channelInfo *channel_info);
 	uint32_t _get_mf_tone_duration(uint8_t mf_digit);
+	void _send_call_progress_tones(uint32_t descriptor, uint8_t type);
+	void _send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t length,
+		void (*callback)(uint32_t channel_number, void *data), void *data, float level);
+	bool _send_buffer_ulaw(int32_t descriptor, const char *buffer_name, Tone_Plant_Callback_Type callback, void *data = NULL, float level = 0.0);
 
 
 

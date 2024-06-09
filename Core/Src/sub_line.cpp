@@ -391,7 +391,6 @@ void Sub_Line::poll(void) {
 
 	case LS_SEIZE_DTMFR: /* Caller perspective */
 		if((linfo->dtmf_receiver_descriptor = Dtmf_receivers.seize(__digit_receiver_callback, this->_line_to_service)) > -1) {
-			Tone_plant.send_call_progress_tones(linfo->tone_plant_descriptor, Tone_Plant::CPT_DIAL_TONE);
 			/* Connect phone to junctor */
 			Xps_logical.connect_phone_orig(&linfo->jinfo, this->_line_to_service);
 			/* Connect DTMF receiver to junctor */
@@ -401,6 +400,8 @@ void Sub_Line::poll(void) {
 			linfo->digit_buffer[0] = 0;
 			/* Connect tone generator to junctor */
 			Xps_logical.connect_tone_plant_output(&linfo->jinfo, linfo->tone_plant_descriptor);
+			/* Send Dial tone */
+			Conn.send_dial_tone(linfo->tone_plant_descriptor);
 			/* Tell the line on the line card that the OR is connected */
 			/* For future dial pulse support */
 			Card_comm.send_command(Card_Comm::RT_LINE, this->_line_to_service, REG_SET_OR_ATTACHED);

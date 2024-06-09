@@ -23,7 +23,7 @@
 
 namespace LOGGING {
 
-const uint8_t LOG_QUEUE_DEPTH = 16;
+const uint8_t LOG_QUEUE_DEPTH = 64;
 const uint16_t MAX_LOG_SIZE = 128;
 const uint8_t MAX_TAG_SIZE = 16;
 const uint8_t MAX_LOG_LEVEL = 6;

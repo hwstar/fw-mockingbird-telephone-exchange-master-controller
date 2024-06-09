@@ -650,11 +650,59 @@ void Tone_Plant::worker(void) {
 
 					}
 					if(ch_info->audio_sample_index >= ch_info->audio_sample_size) {
-						/* Call the callback */
-						ch_info->callback((i & 1) + 1, ch_info->callback_data);
-						ch_info->state = AS_IDLE;
+						/* If not doing a sequence */
+						if(!ch_info->sequence) {
+
+							/* Call the callback */
+							ch_info->callback((i & 1) + 1, ch_info->callback_data);
+							ch_info->state = AS_IDLE;
+						}
+						else { /* Doing a sequence */
+							ch_info->state = AS_NEXT_SEQUENCE_ITEM;
+						}
 					}
 					break;
+
+				case AS_NEXT_SEQUENCE_ITEM:
+					/* Call the callback in the table if it is not NULL */
+					if(ch_info->sequence->callback) {
+						(*ch_info->sequence->callback)((i & 1) + 1, ch_info->callback_data);
+					}
+					/* Point to the next item in the sequence table */
+					ch_info->sequence++;
+
+				/* Break statement intentionally missing */
+
+				case AS_SEQUENCE_ITEM:
+					/* Load next audio sequencer item */
+					switch(ch_info->sequence->command) {
+
+					case ASEQ_CMD_END:
+						ch_info->state = AS_IDLE;
+						break;
+
+					case ASEQ_CMD_SEND_ULAW:{ /* Send ulaw buffer */
+						bool res = this->_send_buffer_ulaw(channel_num, ch_info->sequence->buffer_name,
+								NULL, ch_info->sequence->data, ch_info->sequence->level);
+						/* Return has to be true */
+						if(!res) {
+							POST_ERROR(Err_Handler::EH_INVR);
+						}
+						break;
+					}
+					case ASEQ_CMD_SEND_CPT: /* Send call progress tones */
+						this->_send_call_progress_tones(channel_num, ch_info->sequence->cpt_type);
+						break;
+
+					default:
+						POST_ERROR(Err_Handler::EH_INVC);
+						break;
+
+					} /* End switch sequence command */
+					break;
+
+
+
 
 				default:
 					_channel_info->state = AS_IDLE;
@@ -797,22 +845,13 @@ void Tone_Plant::init(void) {
 
 }
 
-
 /*
- * Send call progress tones.
- * Will continue to call send progress tones until stop() is called.
- */
-void Tone_Plant::send_call_progress_tones(uint32_t descriptor, uint8_t type) {
+* Protected version of send_call_progress_tones for internal use (see next function)
+*
+* Does not respect locking.
+*/
 
-	if(type >= CPT_MAX){
-		POST_ERROR(Err_Handler::EH_ICPT);
-	}
-	if(!this->_validate_descriptor(descriptor)) {
-		POST_ERROR(Err_Handler::EH_IVD);
-	}
-
-	/* LOG_DEBUG(TAG, "send call progress tones: descriptor: %u, type: %u", descriptor, type); */
-	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
+void Tone_Plant::_send_call_progress_tones(uint32_t descriptor, uint8_t type) {
 
 	channelInfo *ch_info = &this->_channel_info[descriptor];
 
@@ -835,6 +874,28 @@ void Tone_Plant::send_call_progress_tones(uint32_t descriptor, uint8_t type) {
 			break;
 	}
 
+}
+/*
+ * Send call progress tones.
+ * Will continue to call send progress tones until stop() is called.
+ */
+void Tone_Plant::send_call_progress_tones(uint32_t descriptor, uint8_t type) {
+
+	if(type >= CPT_MAX){
+		POST_ERROR(Err_Handler::EH_ICPT);
+	}
+	if(!this->_validate_descriptor(descriptor)) {
+		POST_ERROR(Err_Handler::EH_IVD);
+	}
+
+	/* LOG_DEBUG(TAG, "send call progress tones: descriptor: %u, type: %u", descriptor, type); */
+	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
+
+	channelInfo *ch_info = &this->_channel_info[descriptor];
+	ch_info->sequence = NULL;
+
+	this->_send_call_progress_tones(descriptor, type);
+
 	osMutexRelease(this->_lock); /* Release the lock */
 
 }
@@ -843,7 +904,7 @@ void Tone_Plant::send_call_progress_tones(uint32_t descriptor, uint8_t type) {
  * Send a set of digits using MF tones.
  * Call the callback function when the all the digits are sent
  */
-void Tone_Plant::send_mf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number, void *data), void *data) {
+void Tone_Plant::send_mf(int32_t descriptor, const char *digit_string, Tone_Plant_Callback_Type callback, void *data) {
 
 	if(!this->_validate_descriptor(descriptor)) {
 		POST_ERROR(Err_Handler::EH_IVD);
@@ -856,6 +917,7 @@ void Tone_Plant::send_mf(int32_t descriptor, const char *digit_string, void (*ca
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 	channelInfo *ch_info = &this->_channel_info[descriptor];
 
+	ch_info->sequence = NULL;
 
 
 	int len = strlen(digit_string);
@@ -915,7 +977,7 @@ void Tone_Plant::send_mf(int32_t descriptor, const char *digit_string, void (*ca
  * Send a set of digis using DTMF tones.
  * Call the callback function when the all the digits are sent
  */
-void Tone_Plant::send_dtmf(int32_t descriptor, const char *digit_string, void (*callback)(uint32_t channel_number, void *data), void *data) {
+void Tone_Plant::send_dtmf(int32_t descriptor, const char *digit_string, Tone_Plant_Callback_Type callback, void *data) {
 	if(!this->_validate_descriptor(descriptor)) {
 		POST_ERROR(Err_Handler::EH_IVD);
 	}
@@ -927,6 +989,8 @@ void Tone_Plant::send_dtmf(int32_t descriptor, const char *digit_string, void (*
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 	channelInfo *ch_info = &this->_channel_info[descriptor];
+
+	ch_info->sequence = NULL;
 
 	int len = strlen(digit_string);
 	ch_info->digit_string_length = 0;
@@ -1000,6 +1064,8 @@ void Tone_Plant::send_single_tone(uint32_t descriptor, float freq, float level) 
 
 	channelInfo *ch_info = &this->_channel_info[descriptor];
 
+	ch_info->sequence = NULL;
+
 	ch_info->test_tone_freq = freq;
 	ch_info->test_tone_level = level;
 	ch_info->state = AS_SEND_SINGLE_TONE;
@@ -1014,7 +1080,7 @@ void Tone_Plant::send_single_tone(uint32_t descriptor, float freq, float level) 
  */
 
 void Tone_Plant::send(int32_t descriptor, const int16_t *samples,
-	uint32_t length, void (*callback)(uint32_t channel_number, void *data), void *data, float level) {
+	uint32_t length, Tone_Plant_Callback_Type callback, void *data, float level) {
 
 	if (!this->_validate_descriptor(descriptor)) {
 		POST_ERROR(Err_Handler::EH_IVD);
@@ -1028,6 +1094,8 @@ void Tone_Plant::send(int32_t descriptor, const int16_t *samples,
 
 
 	channelInfo *ch_info = &this->_channel_info[descriptor];
+
+	ch_info->sequence = NULL;
 
 	ch_info->audio_samples_level = pow(10,(level/20));
 	ch_info->callback_data = data;
@@ -1040,22 +1108,13 @@ void Tone_Plant::send(int32_t descriptor, const int16_t *samples,
 }
 
 /*
- * Send a ulaw audio sample
- * Call the callback function when the sample is completely sent
+ * Protected version of the function which follows.
+ * Does no parameter checks. Does not respect locking
+ *
  */
 
-void Tone_Plant::send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t length,
-	void (*callback)(uint32_t channel_number, void *data), void *data, float level) {
-
-	if (!this->_validate_descriptor(descriptor)) {
-		POST_ERROR(Err_Handler::EH_IVD);
-	}
-
-	if ((!samples) || (!callback)) {
-		POST_ERROR(Err_Handler::EH_INVP);
-	}
-
-	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
+void Tone_Plant::_send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t length,
+	Tone_Plant_Callback_Type callback, void *data, float level) {
 
 	channelInfo *ch_info = &this->_channel_info[descriptor];
 
@@ -1066,9 +1125,52 @@ void Tone_Plant::send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t 
 	ch_info->audio_sample_bytes = samples;
 	ch_info->state = AS_SEND_AUDIO_ULAW;
 
+}
+/*
+ * Send a ulaw audio sample
+ * Call the callback function when the sample is completely sent
+ */
+
+void Tone_Plant::send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t length,
+	Tone_Plant_Callback_Type callback, void *data, float level) {
+
+	if (!this->_validate_descriptor(descriptor)) {
+		POST_ERROR(Err_Handler::EH_IVD);
+	}
+
+	if ((!samples) || (!callback)) {
+		POST_ERROR(Err_Handler::EH_INVP);
+	}
+
+	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
+	channelInfo *ch_info = &this->_channel_info[descriptor];
+
+	ch_info->sequence = NULL;
+
+	this->_send_ulaw(descriptor, samples, length, callback, data, level);
+
 	osMutexRelease(this->_lock); /* Release the lock */
 
 
+}
+
+/*
+ *  Protected version of the function which follows.
+ *  Does no parameter checks. Does not respect locking
+ */
+
+
+bool Tone_Plant::_send_buffer_ulaw(int32_t descriptor, const char *buffer_name,
+		Tone_Plant_Callback_Type callback, void *data, float level) {
+	uint32_t size;
+	uint8_t *buffer = this->get_audio_buffer(buffer_name, &size);
+	if(!buffer) {
+		return false;
+	}
+
+	this->_send_ulaw(descriptor, buffer, size, callback, data, level);
+
+	return true;
 }
 
 /*
@@ -1079,15 +1181,18 @@ void Tone_Plant::send_ulaw(int32_t descriptor, const uint8_t *samples, uint32_t 
  */
 
 bool Tone_Plant::send_buffer_ulaw(int32_t descriptor,
-	const char *buffer_name, void (*callback)(uint32_t channel_number, void *data), void *data,  float level) {
+	const char *buffer_name, Tone_Plant_Callback_Type callback, void *data,  float level) {
 
-	uint32_t size;
-	uint8_t *buffer = this->get_audio_buffer(buffer_name, &size);
-	if(!buffer) {
-		return false;
+	if((!buffer_name) || (!callback)) {
+		POST_ERROR(Err_Handler::EH_NPFA);
 	}
 
-	this->send_ulaw(descriptor, buffer, size, callback, data, level);
+
+	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
+
+	this->_send_buffer_ulaw(descriptor, buffer_name, callback, data, level);
+
+	osMutexRelease(this->_lock); /* Release the lock */
 
 	return true;
 }
@@ -1112,6 +1217,8 @@ void Tone_Plant::send_loop(int32_t descriptor, const int16_t *samples, uint32_t 
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 	channelInfo *ch_info = &this->_channel_info[descriptor];
+
+	ch_info->sequence = NULL;
 
 	ch_info->audio_samples_level = pow(10,(level/20));
 	ch_info->audio_sample_halfwords = samples;
@@ -1141,6 +1248,8 @@ void Tone_Plant::send_loop_ulaw(int32_t descriptor, const uint8_t *samples, uint
 
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 	channelInfo *ch_info = &this->_channel_info[descriptor];
+
+	ch_info->sequence = NULL;
 
 	ch_info->audio_samples_level = pow(10,(level/20));
 	ch_info->audio_sample_size = length;
@@ -1175,6 +1284,41 @@ bool Tone_Plant::send_buffer_loop_ulaw(int32_t descriptor, const char *buffer_na
 }
 
 /*
+ *  Send a list of audio samples, or a call progress tone as the last item in the list.
+ *
+ *  This takes a pointer to a list (array of Audio_Sequence_List_Type) of the commands to perform.
+ *
+ *  The Audio Sequence list contains the command, and anycommand parameters (depends on the command).
+ *
+ *  The last entry must have ASEQ_CMD_END as the command if the last entry isn't looped or a precise call progress tone.
+ *
+ *  The last sample can be looped or be a precise call progress tone.
+ *
+ *  Calling the stop() method will abort the sequence.
+ *
+ */
+
+void Tone_Plant::send_audio_sequence(int32_t descriptor, const Audio_Sequence_List_Type *audio_sequence_list) {
+
+	if(!this->_validate_descriptor(descriptor)) {
+		POST_ERROR(Err_Handler::EH_IVD);
+	}
+
+	if(!audio_sequence_list) {
+		POST_ERROR(Err_Handler::EH_NPFA);
+
+	}
+
+	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
+	channelInfo *ch_info = &this->_channel_info[descriptor];
+	ch_info->sequence = audio_sequence_list;
+	ch_info->state = AS_SEQUENCE_ITEM;
+	osMutexRelease(this->_lock); /* Release the lock */
+}
+
+
+
+/*
  * Stop call progress tones and audio loops from playing
  */
 
@@ -1186,6 +1330,7 @@ void Tone_Plant::stop(int32_t descriptor) {
 	osMutexAcquire(this->_lock, osWaitForever); /* Get the lock */
 
 	channelInfo *ch_info = &this->_channel_info[descriptor];
+	ch_info->sequence = NULL;
 	ch_info->state = AS_IDLE;
 
 	osMutexRelease(this->_lock); /* Release the lock */
@@ -1364,6 +1509,7 @@ bool Tone_Plant::audio_buffer_exists(const char *name) {
 	return true;
 
 }
+
 
 
 

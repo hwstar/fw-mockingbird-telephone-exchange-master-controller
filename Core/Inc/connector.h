@@ -104,6 +104,7 @@ public:
 	void send_congestion(Conn_Info *info);
 	void release_called_party(Conn_Info *info);
 	const char *get_digits_recognized_buffer_name(void);
+	void send_dial_tone(int32_t descriptor);
 
 };
 

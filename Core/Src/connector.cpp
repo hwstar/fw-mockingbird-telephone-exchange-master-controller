@@ -19,6 +19,11 @@ namespace Connector {
 
 const char *TAG = "connector";
 
+const Tone_Plant::Audio_Sequence_List_Type _receiver_lifted_sequence[2] = {
+		{Tone_Plant::ASEQ_CMD_SEND_ULAW, false, 0.0, NULL, NULL, 0, "receiver_lifted"},
+		{Tone_Plant::ASEQ_CMD_SEND_CPT, false, 0.0, NULL, NULL, Tone_Plant::CPT_DIAL_TONE, NULL }
+
+};
 
 
 /*
@@ -139,7 +144,7 @@ uint32_t Connector::_route_test(const char *dialed_digits, Route_Info *route_inf
 		/* Compare the key against the dialed digits */
 		res = this->_test_against_route(dialed_digits, node->key);
 		if(res == ROUTE_VALID) {
-			LOG_DEBUG("Valid route: %s", dialed_digits);
+			LOG_DEBUG(TAG, "Valid route: %s", dialed_digits);
 			break;
 		}
 	}
@@ -747,6 +752,23 @@ bool Connector::seize_and_connect_tone_generator(Conn_Info *info, bool orig_term
 	Xps_logical.connect_tone_plant_output(&info->jinfo, info->tone_plant_descriptor, orig_term);
 	return true;
 }
+
+/*
+ * Send dial tone and any audio sample which proceeds it if so configured.
+ */
+
+void Connector::send_dial_tone(int32_t descriptor) {
+
+	if(Tone_plant.get_audio_buffer("receiver_lifted")) {
+		Tone_plant.send_audio_sequence(descriptor, _receiver_lifted_sequence);
+	}
+	else {
+		Tone_plant.send_call_progress_tones(descriptor, Tone_Plant::CPT_DIAL_TONE);
+	}
+
+
+}
+
 
 /*
  * Return true if we need to send a sound sample for digits recognized
