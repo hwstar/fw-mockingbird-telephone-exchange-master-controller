@@ -48,6 +48,7 @@ class Logging {
     void init(void);
     void loop(void);
     void panic(const char *tag, uint32_t line, const char *format, ...);
+    void flush(void);
 
 
 

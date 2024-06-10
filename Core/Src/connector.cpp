@@ -806,9 +806,15 @@ void Connector::send_ringing(Conn_Info *info) {
 
 
 void Connector::send_busy(Conn_Info *info) {
-	Tone_plant.send_call_progress_tones(info->tone_plant_descriptor, Tone_Plant::CPT_BUSY);
-}
 
+
+	if(Tone_plant.get_audio_buffer("called_party_busy")) {
+		Tone_plant.send_buffer_loop_ulaw(info->tone_plant_descriptor,"called_party_busy");
+	}
+	else {
+		Tone_plant.send_call_progress_tones(info->tone_plant_descriptor, Tone_Plant::CPT_BUSY);
+	}
+}
 
 /*
  * Send congestion tones
@@ -816,7 +822,14 @@ void Connector::send_busy(Conn_Info *info) {
 
 
 void Connector::send_congestion(Conn_Info *info) {
-	Tone_plant.send_call_progress_tones(info->tone_plant_descriptor, Tone_Plant::CPT_CONGESTION);
+
+	if(Tone_plant.get_audio_buffer("congestion")) {
+		Tone_plant.send_buffer_loop_ulaw(info->tone_plant_descriptor ,"congestion");
+	}
+	else {
+		Tone_plant.send_call_progress_tones(info->tone_plant_descriptor, Tone_Plant::CPT_CONGESTION);
+	}
+
 }
 
 /*

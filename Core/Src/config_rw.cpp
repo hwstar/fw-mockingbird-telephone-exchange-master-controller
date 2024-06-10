@@ -247,6 +247,7 @@ static bool _incoming_trunks_callback(const char *section, const char *key, cons
 static bool _indications_callback(const char *section, const char *key, const char *value, uint32_t line_number, void *data) {
 	const char *methods[] = {"none", "precise", "sample", NULL};
 
+
 	if(!data) {
 		POST_ERROR(Err_Handler::EH_NPFA);
 	}
@@ -256,6 +257,65 @@ static bool _indications_callback(const char *section, const char *key, const ch
 	/* Split value into substrings */
 	uint32_t substring_count = 3;
 	char *indications_substrings[3];
+	bool is_invalid = false;
+	int32_t method;
+
+	/*
+	 * Lambda function to validate either a precise method or a sample method
+	 */
+
+	auto validate_precise_sample = [&](const char *s_type, uint32_t kw_bits) {
+		if(method == 0) {
+			is_invalid = true;
+		}
+		else if((method == 2) && (substring_count != 2)) {
+			/* No file provided */
+			is_invalid = true;
+		}
+		else {
+			/* Stat and load the file */
+			if((method == 2) &&(!Config_rw.stat_and_load_audio_sample(s_type, indications_substrings[1]))) {
+				is_invalid = true;
+			}
+			else if((method == 0) && substring_count != 1) {
+				is_invalid = true;
+			}
+			else {
+				/* All good */
+				*keyword_bits |= kw_bits;
+			}
+
+		}
+	};
+
+	/*
+	 * Lambda function to validate either a sample method or none method
+	 */
+
+	auto validate_none_sample = [&](const char *s_type, uint32_t kw_bits) {
+		if(method == 1) {
+			is_invalid = true;
+		}
+		else if((method == 2) && (substring_count != 2)) {
+			/* No file provided */
+			is_invalid = true;
+		}
+		else {
+			/* Stat and load the file */
+			if((method == 2) &&(!Config_rw.stat_and_load_audio_sample(s_type, indications_substrings[1]))) {
+					is_invalid = true;
+			}
+			else if((method == 0) && substring_count != 1) {
+				is_invalid = true;
+			}
+			else {
+				/* All good */
+				*keyword_bits |= kw_bits;
+			}
+		}
+
+	};
+
 
 	if(!value[0]) {
 		Config_rw.syntax_error(line_number, "Missing value(s)");
@@ -266,7 +326,7 @@ static bool _indications_callback(const char *section, const char *key, const ch
 	/* Must have one or two substrings only */
 	if((substring_count > 2)) {
 		Utility.deallocate_long_string(alloc_mem);
-
+		Config_rw.syntax_error(line_number, "Too many parameters");
 	}
 
 
@@ -281,7 +341,7 @@ static bool _indications_callback(const char *section, const char *key, const ch
 	}
 
 	/* Attempt to match a method keyword */
-	int32_t method = Utility.keyword_match(indications_substrings[0], methods);
+	method = Utility.keyword_match(indications_substrings[0], methods);
 
 	/* If no method match */
 	if(method  == -1) {
@@ -290,55 +350,17 @@ static bool _indications_callback(const char *section, const char *key, const ch
 	}
 
 	/* Verify that the various combinations of type, method, and audio file are valid */
-	bool is_invalid = false;
+
 
 	switch(indication_type) {
 	case PT_RINGING: /* ringing */
 		/* Valid methods: precise, sample */
-		if(method == 0)
-			is_invalid = true;
-		else if((method == 2) && (substring_count != 2)) {
-			/* No file provided */
-			is_invalid = true;
-		}
-		else {
-			/* Stat and load the file */
-			if((method == 2) &&(!Config_rw.stat_and_load_audio_sample(types[0], indications_substrings[1]))) {
-				is_invalid = true;
-			}
-			else if((method == 0) && substring_count != 1) {
-				is_invalid = true;
-			}
-			else {
-				/* All good */
-				*keyword_bits |= 1;
-			}
-
-		}
+		validate_precise_sample(types[0], 1);
 		break;
 
 	case PT_RECEIVER_LIFTED: /* receiver_lifted */
 		/* Valid methods: none, sample */
-		if(method == 1) {
-			is_invalid = true;
-		}
-		else if((method == 2) && (substring_count != 2)) {
-			/* No file provided */
-			is_invalid = true;
-		}
-		else {
-			/* Stat and load the file */
-			if((method == 2) && (!Config_rw.stat_and_load_audio_sample(types[1], indications_substrings[1]))) {
-					is_invalid = true;
-			}
-			else if((method == 0) && substring_count != 1) {
-				is_invalid = true;
-			}
-			else {
-				/* All good */
-				*keyword_bits |= 2;
-			}
-		}
+		validate_none_sample(types[1], 2);
 		break;
 
 	case PT_DIAL_TONE: /* dial tone */
@@ -354,75 +376,24 @@ static bool _indications_callback(const char *section, const char *key, const ch
 
 	case PT_DIGITS_RECOGNIZED: /* digits_recognized */
 		/* Valid methods: none, sample */
-		if(method == 1) {
-			is_invalid = true;
-		}
-		else if((method == 2) && (substring_count != 2)) {
-			/* No file provided */
-			is_invalid = true;
-		}
-		else {
-			/* Stat and load the file */
-			if((method == 2) && (!Config_rw.stat_and_load_audio_sample(types[3], indications_substrings[1]))) {
-					is_invalid = true;
-			}
-			else if((method == 0) && substring_count != 1) {
-				is_invalid = true;
-			}
-			else {
-				/* All good */
-				*keyword_bits |= 8;
-			}
-		}
+		validate_none_sample(types[3], 8);
 		break;
 
 	case PT_TRUNK_SIGNALING: /* trunk signaling */
 		/* Valid methods: none, sample */
-		if(method == 1) {
-			is_invalid = true;
-		}
-		else if((method == 2) && (substring_count != 2)) {
-			/* No file provided */
-			is_invalid = true;
-		}
-		else {
-			/* Stat and load the file */
-			if((method == 2) &&(!Config_rw.stat_and_load_audio_sample(types[4], indications_substrings[1]))) {
-					is_invalid = true;
-			}
-			else if((method == 0) && substring_count != 1) {
-				is_invalid = true;
-			}
-			else {
-				/* All good */
-				*keyword_bits |= 0x10;
-			}
-		}
+		validate_none_sample(types[3], 0x10);
 		break;
 
 	case PT_CALLED_PARTY_BUSY: /* called party busy */
-		/* Valid methods: precise */
-		if((method != 1) || (substring_count != 1)) {
-			is_invalid = true;
-		}
-		else {
-			/* All good */
-			*keyword_bits |= 0x20;
-		}
+		/* Valid methods: precise, sample */
+		validate_precise_sample(types[5], 0x20);
 		break;
 
 
 	case PT_CONGESTION: /* congestion */
-		/* Valid methods: precise */
-		if((method != 1) || (substring_count != 1)) {
-			is_invalid = true;
-		}
-		else {
-			/* All good */
-			*keyword_bits |= 0x40;
-		}
+		/* Valid methods: precise, sample */
+		validate_precise_sample(types[6], 0x40);
 		break;
-
 
 	default:
 		break;
@@ -960,7 +931,8 @@ bool Config_RW::stat_and_load_audio_sample(const char *sample_name, const char *
 		POST_ERROR(Err_Handler::EH_NSFL);
 	}
 
-
+	/* Wait for log messages to be sent */
+	Logger.flush();
 
 	return true;
 }

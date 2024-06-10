@@ -143,6 +143,17 @@ void Logging::init(void) {
 }
 
 /*
+ * Wait for the logging queue to become empty
+ */
+
+void Logging::flush(void) {
+	while(osMessageQueueGetCount(this->_queue_logging_handle) > 0) {
+		/* Let lower priority tasks run */
+		osDelay(10);
+	}
+}
+
+/*
  * Process log messages from the queue.
  */
 

@@ -106,6 +106,7 @@ public:
 	const char *get_digits_recognized_buffer_name(void);
 	void send_dial_tone(int32_t descriptor);
 
+
 };
 
 } /* End namespace Connector */
