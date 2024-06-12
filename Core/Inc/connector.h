@@ -67,7 +67,6 @@ typedef struct Conn_Info {
 
 class Connector {
 protected:
-	uint32_t _route_test(const char *dialed_digits, Route_Info *route_info);
 	uint32_t _test_against_route(const char *string_to_test, const char *route_table_entry);
 	Pool_Alloc::Pool_Alloc _routing_pool;
 public:
@@ -75,7 +74,7 @@ public:
 	void init(void);
 	void config();
 	void prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32_t source_phys_line_number);
-	uint32_t test(Conn_Info *conn_info, const char *digits_received);
+	uint32_t test(Conn_Info *conn_info, const char *dialed_digits);
 	uint32_t resolve(Conn_Info *conn_info);
 	uint32_t resolve_try_next_trunk(Conn_Info *conn_info);
 

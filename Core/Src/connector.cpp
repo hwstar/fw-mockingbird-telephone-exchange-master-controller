@@ -75,17 +75,74 @@ uint32_t Connector::_test_against_route(const char *string_to_test, const char *
 	return match_type;
 }
 
+
+
+
 /*
- * Test dialed digits against route in configuration tree
+ * Called once after RTOS is initialized
  */
 
-uint32_t Connector::_route_test(const char *dialed_digits, Route_Info *route_info) {
-	if((!dialed_digits) || (!route_info)) {
+void Connector::init(void) {
+
+}
+
+/*
+ * Called when the system is about to go on line
+ *
+ * Read configuration data and set up configuration here
+ */
+
+void Connector::config() {
+
+}
+
+
+
+/*
+ * Prepare for a connection
+ */
+
+void Connector::prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32_t source_phys_line_number) {
+	if(!conn_info) {
 		POST_ERROR(Err_Handler::EH_NPFA);
 	}
+
+	/* Reset digit buffer and digit counts */
+	conn_info->num_dialed_digits = conn_info->prev_num_dialed_digits = 0;
+	conn_info->digit_buffer[0] = 0;
+
+	/* Reset the pointer to the peer */
+	conn_info->peer = NULL;
+
+	/* Configure initial routing info */
+	Utility.memset(&conn_info->route_info, 0, sizeof(conn_info->route_info));
+	conn_info->route_info.state = ROUTE_INDETERMINATE;
+	conn_info->route_info.source_equip_type = source_equip_type;
+	conn_info->route_info.source_phys_line_number = source_phys_line_number;
+}
+
+
+/*
+ * Called by line or trunk objects to test a route
+ *
+ * Returns a result code ROUTE_* which must be checked.
+ */
+
+
+uint32_t Connector::test(Conn_Info *conn_info, const char *dialed_digits) {
+
+
+	if((!dialed_digits) || (!conn_info)) {
+		POST_ERROR(Err_Handler::EH_NPFA);
+	}
+
+	Route_Info *route_info = &conn_info->route_info;
+
 	if(route_info->state == ROUTE_INVALID) {
 		return ROUTE_INVALID;
 	}
+
+
 
 	uint32_t res = ROUTE_INDETERMINATE;
 
@@ -271,79 +328,11 @@ uint32_t Connector::_route_test(const char *dialed_digits, Route_Info *route_inf
 		else {
 			POST_ERROR(Err_Handler::EH_UHC);
 		}
-
-
-
-
-
-
 	} /* Endif route valid */
-
-
-	return res;
-
-
-}
-
-
-
-/*
- * Called once after RTOS is initialized
- */
-
-void Connector::init(void) {
-
-}
-
-/*
- * Called when the system is about to go on line
- *
- * Read configuration data and set up configuration here
- */
-
-void Connector::config() {
-
-}
-
-
-
-/*
- * Prepare for a connection
- */
-
-void Connector::prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32_t source_phys_line_number) {
-	if(!conn_info) {
-		POST_ERROR(Err_Handler::EH_NPFA);
-	}
-
-	/* Reset digit buffer and digit counts */
-	conn_info->num_dialed_digits = conn_info->prev_num_dialed_digits = 0;
-	conn_info->digit_buffer[0] = 0;
-
-	/* Reset the pointer to the peer */
-	conn_info->peer = NULL;
-
-	/* Configure initial routing info */
-	Utility.memset(&conn_info->route_info, 0, sizeof(conn_info->route_info));
-	conn_info->route_info.state = ROUTE_INDETERMINATE;
-	conn_info->route_info.source_equip_type = source_equip_type;
-	conn_info->route_info.source_phys_line_number = source_phys_line_number;
-}
-
-
-/*
- * Called by line or trunk objects to test a route
- *
- * Returns a result code which must be checked.
- */
-
-
-uint32_t Connector::test(Conn_Info *conn_info, const char *digits_received) {
-
-	uint32_t res = this->_route_test(digits_received, &conn_info->route_info);
-
 	return res;
 }
+
+
 
 /*
  * Resolve an originating call to get to the desired termination.
