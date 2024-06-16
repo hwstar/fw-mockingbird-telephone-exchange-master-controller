@@ -19,7 +19,7 @@ enum {ET_UNDEF=0, ET_LINE, ET_TRUNK};
 /* Peer messages */
 enum {PM_NOP=0,PM_SEIZE=1, PM_RELEASE=2, PM_ANSWERED=3, PM_CALLED_PARTY_HUNGUP=4, PM_TRUNK_BUSY=5,
 	PM_TRUNK_NO_WINK=6, PM_TRUNK_READY_FOR_ADDR_INFO=7, PM_TRUNK_ADDR_INFO_READY=8,
-	PM_TRUNK_ADDR_INFO_SENT=9, PM_TRUNK_READY_TO_CONNECT_CALLER=10};
+	PM_TRUNK_READY_TO_CONNECT_CALLER=10};
 /* Peer message return values */
 enum {PMR_NOP=0, PMR_OK=1, PMR_BUSY=2, PMR_TRUNK_BUSY=3};
 
@@ -35,6 +35,7 @@ typedef struct Route_Info {
 	uint8_t dest_line_trunk_count;
 	uint8_t dest_phys_lines_trunks[MAX_PHYS_LINE_TRUNK_TABLE];
 	char dialed_number[MAX_DIALED_DIGITS + 1];
+	char *trunk_prefix;
 	Config_RW::Config_Node_Type *rt_head;
 	Config_RW::Config_Section_Type *dest_section;
 
@@ -42,8 +43,6 @@ typedef struct Route_Info {
 
 
 typedef struct Conn_Info {
-
-	uint8_t route_table_number;
 	uint8_t phys_line_trunk_number;
 	uint8_t trunk_index;
 	uint8_t equip_type;

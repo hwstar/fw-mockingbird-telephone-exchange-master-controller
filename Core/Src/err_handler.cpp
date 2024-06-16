@@ -48,6 +48,8 @@ static const Error_Table_Entry Error_table[] = {
 		{ACTION_PANIC, "No memory Available"},
 		{ACTION_PANIC, "No Such file"},
 		{ACTION_PANIC, "Invalid command"},
+		{ACTION_PANIC, "Unsupported feature"}, /* 40 */
+		{ACTION_PANIC, "No resource"},
 
 
 

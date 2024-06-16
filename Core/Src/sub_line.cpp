@@ -324,9 +324,7 @@ void Sub_Line::init(void) {
 	/* Initialization of line-specific information */
 	for(uint8_t index = 0; index < MAX_DUAL_LINE_CARDS * 2; index++) {
 		Connector::Conn_Info *linfo = &this->_conn_info[index];
-		/* Route table number */
-		/* Todo make this configurable */
-		linfo->route_table_number = 0;
+
 
 		/* Digit dialing timer */
 		linfo->dial_timer = osTimerNew(__dial_timer_callback, osTimerOnce, linfo, NULL);
@@ -501,7 +499,6 @@ void Sub_Line::poll(void) {
 		case Connector::ROUTE_DEST_CONNECTED:
 			{
 				uint32_t equip_type = Conn.get_called_equip_type(linfo);
-				/* Todo: move to connector */
 				if(equip_type == Connector::ET_LINE) {
 					/* Send ringing */
 					Conn.send_ringing(linfo);
@@ -718,8 +715,6 @@ void Sub_Line::poll(void) {
 	case LS_RING: /* Called perspective */
 		/* Tell the SLIC to start ringing */
 		Card_comm.send_command(Card_Comm::RT_LINE, this->_line_to_service, REG_REQUEST_RINGING);
-		/* Todo: Add ringing tone */
-
 		linfo->state = LS_RINGING;
 		break;
 

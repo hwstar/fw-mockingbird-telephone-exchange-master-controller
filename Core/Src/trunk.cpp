@@ -141,6 +141,23 @@ void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
 				tinfo->state = TS_RESET;
 				break;
 
+
+			case TS_TANDEM_CALL:
+			case TS_TANDEM_ADVANCE:
+			case TS_TANDEM_SEND_ADDR_INFO:
+			case TS_TANDEM_WAIT_ADDR_SENT:
+			case TS_TANDEM_CONNECT_CALLER:
+			case TS_TANDEM_WAIT_SUPV:
+			case TS_TANDEM_SUPV:
+			case TS_TANDEM_IN_CALL:
+			case TS_TANDEM_SEND_CONGESTION:
+			case TS_TANDEM_CONGESTION:
+				tinfo->state = TS_TANDEM_CALLER_DISCONNECTED;
+				break;
+
+
+
+
 			case TS_INCOMING_ANSWERED:
 				tinfo->state = TS_INCOMING_TEARDOWN;
 				tinfo->called_party_hangup = false;
@@ -150,6 +167,7 @@ void Trunk::event_handler(uint32_t event_type, uint32_t resource) {
 			case TS_SEND_RINGING:
 				tinfo->state = TS_RINGING_TEARDOWN;
 				break;
+
 
 			default:
 				break;
@@ -243,11 +261,20 @@ uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t p
 			tinfo->peer = conn_info;
 			tinfo->state = TS_INCOMING_CONNECT_AUDIO;
 		}
+		else if(tinfo->state == TS_TANDEM_WAIT_SUPV) {
+			tinfo->peer = conn_info;
+			tinfo->state = TS_TANDEM_SUPV;
+
+		}
 		break;
 
 	case Connector::PM_CALLED_PARTY_HUNGUP:
 		/* Called party hung up */
-		if(tinfo->state == TS_INCOMING_ANSWERED) {
+		if(tinfo->state == TS_TANDEM_IN_CALL) {
+			tinfo->called_party_hangup = true;
+			tinfo->state = TS_TANDEM_CALLED_DISCONNECTED;
+		}
+		else if(tinfo->state == TS_INCOMING_ANSWERED) {
 			/* LOG_DEBUG(TAG, "Called party hung up"); */
 			tinfo->called_party_hangup = true;
 			tinfo->state = TS_INCOMING_TEARDOWN;
@@ -261,9 +288,41 @@ uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t p
 		}
 		break;
 
-	default:
-		LOG_ERROR(TAG, "Unrecognized message: %u", message);
+	case Connector::PM_TRUNK_BUSY:
+		if(tinfo->state == TS_TANDEM_CALL) {
+			LOG_INFO(TAG, "Trunk busy returned by PM");
+			tinfo->state = TS_TANDEM_ADVANCE;
+
+		}
 		break;
+
+	case Connector::PM_TRUNK_NO_WINK:
+		if(tinfo->state == TS_TANDEM_CALL) {
+			uint32_t dest_trunk_number = Conn.get_called_phys_line_trunk(tinfo);
+			LOG_WARN(TAG, "No wink seen on trunk: %u", dest_trunk_number);
+			tinfo->state = TS_TANDEM_ADVANCE;
+		}
+		break;
+
+	case Connector::PM_TRUNK_READY_FOR_ADDR_INFO:
+		if(tinfo->state == TS_TANDEM_CALL) {
+			tinfo->state = TS_TANDEM_SEND_ADDR_INFO;
+		}
+		break;
+
+
+	case Connector::PM_TRUNK_READY_TO_CONNECT_CALLER:
+		if(tinfo->state == TS_TANDEM_WAIT_ADDR_SENT) {
+			tinfo->state = TS_TANDEM_CONNECT_CALLER;
+		}
+		break;
+
+
+	default: {
+		uint32_t dest_trunk_number = Conn.get_called_phys_line_trunk(tinfo);
+		LOG_ERROR(TAG, "Unhandled message. Message: %d, state: %d, trunk number: %d", message, tinfo->state, dest_trunk_number);
+		break;
+	}
 
 	}
 
@@ -292,10 +351,6 @@ void Trunk::init(void) {
 
 	for(uint8_t index = 0; index < MAX_TRUNK_CARDS; index++) {
 		Connector::Conn_Info *tinfo = &this->_conn_info[index];
-		/* Route table number */
-		/* Todo: make this configurable */
-		tinfo->route_table_number = 1;
-
 		tinfo->state = TS_IDLE;
 		tinfo->pending_state = TS_IDLE;
 		tinfo->phys_line_trunk_number = index;
@@ -395,7 +450,17 @@ void Trunk::poll(void) {
 			switch(res) {
 			case Connector::ROUTE_INVALID:
 			case Connector::ROUTE_DEST_TRUNK_BUSY:
-				tinfo->state = TS_SEND_CONGESTION;
+				/* If destination is a trunk, then we need to try to select another trunk in the group */
+				if(tinfo->route_info.dest_equip_type == Connector::ET_TRUNK) {
+					tinfo->state = TS_TANDEM_ADVANCE;
+
+				}
+				else if (tinfo->route_info.dest_equip_type == Connector::ET_LINE) {
+					tinfo->state = TS_SEND_CONGESTION;
+				}
+				else {
+					POST_ERROR(Err_Handler::EH_IET);
+				}
 				break;
 
 			case Connector::ROUTE_DEST_BUSY:
@@ -403,7 +468,16 @@ void Trunk::poll(void) {
 				break;
 
 			case Connector::ROUTE_DEST_CONNECTED:
-				tinfo->state = TS_SEND_RINGING;
+				/* Determine if local or tandem connection */
+				if(tinfo->route_info.dest_equip_type == Connector::ET_LINE) {
+					tinfo->state = TS_SEND_RINGING;
+				}
+				else if (tinfo->route_info.dest_equip_type == Connector::ET_TRUNK) {
+					tinfo->state = TS_TANDEM_CALL;
+				}
+				else {
+					POST_ERROR(Err_Handler::EH_IET);
+				}
 				break;
 
 			default:
@@ -419,6 +493,9 @@ void Trunk::poll(void) {
 		break;
 	}
 
+	/*
+	 * Incoming local trunk states
+	 */
 
 	case TS_SEND_RINGING:
 		Conn.send_ringing(tinfo);
@@ -477,6 +554,105 @@ void Trunk::poll(void) {
 
 
 	/*
+	 * Incoming tandem trunk states
+	 */
+
+	case TS_TANDEM_CALL:
+	    /* Wait for outgoing trunk peer message response */
+		break;
+
+	case TS_TANDEM_SEND_ADDR_INFO: {
+		/* Send address info to outgoing tandem trunk */
+		uint8_t start = tinfo->route_info.dest_dial_start_index + 1;
+		uint8_t end = strlen(tinfo->route_info.dialed_number);
+
+		/* Make the trunk dial string */
+		Utility.make_trunk_dial_string(tinfo->trunk_outgoing_address, tinfo->digit_buffer, start, end,
+				Connector::MAX_TRUNK_OUTGOING_ADDRESS, tinfo->route_info.trunk_prefix);
+		LOG_DEBUG(TAG, "Tandem call outgoing address info: %s", tinfo->trunk_outgoing_address);
+
+		/* Clear everything off of the junctor and let the outgoing trunk do what it needs to do */
+		Conn.release_tone_generator(tinfo);
+		Conn.disconnect_caller_party_audio(tinfo);
+
+		/* Tell the outgoing trunk the address has been formatted and is ready to send */
+		Conn.send_message_to_dest(tinfo, Connector::PM_TRUNK_ADDR_INFO_READY);
+
+		/* Wait for address info to be sent */
+		tinfo->state = TS_TANDEM_WAIT_ADDR_SENT;
+	}
+
+		break;
+
+	case TS_TANDEM_WAIT_ADDR_SENT:
+		/* Wait for MF digits to be sent */
+		break;
+
+	case TS_TANDEM_CONNECT_CALLER:
+		Conn.connect_caller_party_audio(tinfo);
+		tinfo->state = TS_TANDEM_WAIT_SUPV;
+		/* Connect originating trunk to terminating trunk */
+		break;
+
+	case TS_TANDEM_WAIT_SUPV:
+		/* Wait for trunk supervision on outgoing end of call */
+		break;
+
+	case TS_TANDEM_SUPV:
+		/* Send answer supervision back to caller's switch */
+		LOG_DEBUG(TAG, "Tandem answer supervision seen, relaying to originator");
+		Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_INCOMING_CONNECTED);
+		tinfo->state = TS_TANDEM_IN_CALL;
+		break;
+
+	case TS_TANDEM_IN_CALL:
+		/* Wait for PM or trunk card event */
+		break;
+
+	case TS_TANDEM_ADVANCE:
+		/* If the originating trunk tone generator was disconnected, reconnect it here */
+		if(tinfo->tone_plant_descriptor == -1) {
+			Conn.seize_and_connect_tone_generator(tinfo);
+		}
+
+		tinfo->state = TS_TANDEM_SEND_CONGESTION;
+
+		/* Todo: select next outgoing trunk for tandem operation */
+		/* Trunk was busy */
+		/* Advance to the next trunk in the group */
+		break;
+
+	case TS_TANDEM_SEND_CONGESTION:
+		/* Seize a tone generator */
+		Conn.send_congestion(tinfo);
+		/* Wait for caller to disconnect */
+		tinfo->state = TS_TANDEM_CONGESTION;
+		break;
+
+
+	case TS_TANDEM_CONGESTION:
+		/* Wait for caller to hang up */
+		break;
+
+
+
+	case TS_TANDEM_CALLER_DISCONNECTED:
+		/* Calling party disconnected */
+		LOG_DEBUG(TAG, "Tandem calling party disconnected");
+		Conn.send_message_to_dest(tinfo, Connector::PM_RELEASE); /* Release outgoing trunk */
+		tinfo->state = TS_RESET;
+		break;
+
+
+	case TS_TANDEM_CALLED_DISCONNECTED:
+		LOG_DEBUG(TAG, "Tandem called party disconnected");
+		/* Called party disconnected */
+		Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_DROP_CALL);
+		tinfo->state = TS_RESET;
+		break;
+
+
+	/*
 	 * Outgoing trunk states
 	 */
 
@@ -487,7 +663,7 @@ void Trunk::poll(void) {
 		}
 
 		/* Seize the trunk */
-		/* LOG_DEBUG(TAG, "Send seize trunk command to card, wait for wink or busy"); */
+		LOG_DEBUG(TAG, "Send seize trunk command to card, wait for wink or busy");
 		Card_comm.send_command(Card_Comm::RT_TRUNK, this->_trunk_to_service, REG_SEIZE_TRUNK);
 		tinfo->state = TS_WAIT_WINK_OR_BUSY;
 		break;

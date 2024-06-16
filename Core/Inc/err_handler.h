@@ -48,6 +48,8 @@ enum {
 	EH_NMA=37, /* No memory Available */
 	EH_NSFL=38, /* No Such file */
 	EH_INVC=39, /* Invalid Command */
+	EH_USF=40, /* Unsupported feature */
+	EH_NORC=41, /* No resource */
 
 	EH_NUM_ERROR_CODES
 };

@@ -119,6 +119,7 @@ void Connector::prepare(Conn_Info *conn_info, uint32_t source_equip_type, uint32
 	conn_info->route_info.state = ROUTE_INDETERMINATE;
 	conn_info->route_info.source_equip_type = source_equip_type;
 	conn_info->route_info.source_phys_line_number = source_phys_line_number;
+	conn_info->route_info.trunk_prefix = NULL;
 }
 
 
@@ -318,6 +319,11 @@ uint32_t Connector::test(Conn_Info *conn_info, const char *dialed_digits) {
 					POST_ERROR(Err_Handler::EH_IPLN);
 				}
 				route_info->dest_dial_start_index = (uint8_t) start_index;
+			}
+			/* Look up the optional prefix string pointer and add it to the route info */
+			Config_RW::Config_Node_Type *prefix_node = Config_rw.find_node("prefix", tg_section->head);
+			if(prefix_node) {
+				route_info->trunk_prefix = prefix_node->value;
 			}
 
 			/* Deallocate working string */

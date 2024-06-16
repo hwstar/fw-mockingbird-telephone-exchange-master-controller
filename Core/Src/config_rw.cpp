@@ -37,14 +37,14 @@ static bool _phys_trunk_callback(const char *section, const char *key, const cha
  */
 
 static bool _outgoing_trunk_group(const char *section, const char *key, const char *value, uint32_t line_number, void *data) {
-	static const char *keywords[] = {"trunk_list", "start_index", NULL};
-
-	uint32_t *caller_keyword_bits = (uint32_t *) data;
-	int32_t res = Utility.keyword_match(key, keywords);
+	static const char *keywords[] = {"trunk_list", "start_index","prefix", NULL};
 
 	if(!data) {
 		POST_ERROR(Err_Handler::EH_NPFA);
 	}
+
+	uint32_t *caller_keyword_bits = (uint32_t *) data;
+	int32_t res = Utility.keyword_match(key, keywords);
 
 	switch(res) {
 	case 0: { /* trunk_list */
@@ -84,7 +84,20 @@ static bool _outgoing_trunk_group(const char *section, const char *key, const ch
 		if(!value[0]) {
 			Config_rw.syntax_error(line_number, "Missing start index");
 		}
+		if(!Utility.is_digits(value)) {
+			Config_rw.syntax_error(line_number, "Start index must be numeric");
+		}
 		break;
+
+	case 2: /* Trunk dialing prefix */
+		if(!value[0]) {
+			Config_rw.syntax_error(line_number, "Missing prefix value");
+		}
+		if(!Utility.is_digits(value)) {
+			Config_rw.syntax_error(line_number, "Prefix must be numeric");
+		}
+		break;
+
 
 	default:
 		Config_rw.syntax_error(line_number, "Bad key");
@@ -429,21 +442,16 @@ static bool _routing_table_callback(const char *section, const char *key, const 
 		Utility.deallocate_long_string(alloc_mem);
 		Config_rw.syntax_error(line_number, "Incorrect number of arguments");
 	}
-	/* Must be sub only if equipment type is 2, and sub or tg if equipment type is 1 */
-	if(equip_type == 2) {
-		if(strcmp(routing_table_substrings[0],"sub")) {
-			Utility.deallocate_long_string(alloc_mem);
-			Config_rw.syntax_error(line_number, "Invalid equipment type");
-		}
-	}
-	else if(equip_type == 1) {
-		const char *eqt_strings[] = {"sub","tg", NULL};
+	const char *eqt_strings[] = {"sub","tg", NULL};
+	/* Validate destination types */
+	if((equip_type == 1)||(equip_type == 2)) {
+
 		if(Utility.keyword_match(routing_table_substrings[0], eqt_strings) == -1) {
 			Utility.deallocate_long_string(alloc_mem);
 			Config_rw.syntax_error(line_number, "Invalid equipment type");
-
 		}
 	}
+
 
 	/* Must be able to look up the physical subscriber line */
 	int32_t res = Config_rw.traverse_nodes(routing_table_substrings[1]);
