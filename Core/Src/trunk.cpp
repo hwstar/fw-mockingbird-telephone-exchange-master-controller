@@ -297,6 +297,7 @@ uint32_t Trunk::peer_message_handler(Connector::Conn_Info *conn_info, uint32_t p
 		break;
 
 	case Connector::PM_TRUNK_NO_WINK:
+		LOG_INFO(TAG, "Debug: no wink, state = %d", tinfo->state); // DEBUG
 		if(tinfo->state == TS_TANDEM_CALL) {
 			uint32_t dest_trunk_number = Conn.get_called_phys_line_trunk(tinfo);
 			LOG_WARN(TAG, "No wink seen on trunk: %u", dest_trunk_number);
@@ -609,18 +610,38 @@ void Trunk::poll(void) {
 		/* Wait for PM or trunk card event */
 		break;
 
-	case TS_TANDEM_ADVANCE:
-		/* If the originating trunk tone generator was disconnected, reconnect it here */
-		if(tinfo->tone_plant_descriptor == -1) {
-			Conn.seize_and_connect_tone_generator(tinfo);
+	case TS_TANDEM_ADVANCE: {
+		/* See if we can use a different trunk */
+		uint32_t res = Conn.resolve_try_next_trunk(tinfo);
+		switch(res) {
+		case Connector::ROUTE_DEST_TRUNK_BUSY:
+			LOG_DEBUG(TAG, "Trunk busy after trunk advance");
+			break; /* This trunk is busy, try again later */
+
+		case Connector::ROUTE_NO_MORE_TRUNKS:
+			/* No more outgoing trunks to try */
+			LOG_DEBUG(TAG, "No more trunks after trunk advance");
+			/* If the originating trunk tone generator was disconnected, reconnect it here */
+			if(tinfo->tone_plant_descriptor == -1) {
+				Conn.seize_and_connect_tone_generator(tinfo);
+			}
+			tinfo->state = TS_TANDEM_SEND_CONGESTION;
+			break;
+
+		case Connector::ROUTE_DEST_CONNECTED:
+			LOG_DEBUG(TAG, "Trunk advance successful");
+			/* Trunk appears to be free, wait for further status */
+			tinfo->state = TS_TANDEM_CALL;
+			break;
+
+		default:
+			/* Unhandled result */
+			POST_ERROR(Err_Handler::EH_UHC);
+			break;
 		}
-
-		tinfo->state = TS_TANDEM_SEND_CONGESTION;
-
-		/* Todo: select next outgoing trunk for tandem operation */
-		/* Trunk was busy */
-		/* Advance to the next trunk in the group */
+	}
 		break;
+
 
 	case TS_TANDEM_SEND_CONGESTION:
 		/* Seize a tone generator */
